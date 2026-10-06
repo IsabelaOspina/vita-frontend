@@ -2,6 +2,7 @@
   "expo": {
     "name": "vita-frontend",
     "slug": "vita-frontend",
+    "owner": "vita-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -37,6 +38,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "10f91bae-97d1-4706-951f-70623ee189bc"
+      }
     }
   }
 }
