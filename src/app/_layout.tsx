@@ -1,18 +1,34 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { AccesibilidadProvider, useAccesibilidad } from '@/context/accesibilidad-context';
 
-SplashScreen.preventAutoHideAsync();
+export default function RootLayout() {
+    return (
+        <AccesibilidadProvider>
+            <Navegacion />
+        </AccesibilidadProvider>
+    );
+}
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
-  );
+function Navegacion() {
+    const { colores, altoContraste } = useAccesibilidad();
+
+    // TODO(sesión): cuando existan pantallas privadas (por ejemplo el panel principal),
+    // protegerlas con <Stack.Protected guard={...}> para que solo se entre con token.
+    return (
+        <>
+            <StatusBar style={altoContraste ? 'light' : 'dark'} />
+            <Stack
+                screenOptions={{
+                    headerShown: false,
+                    contentStyle: { backgroundColor: colores.fondo },
+                    animation: 'slide_from_right',
+                }}>
+                <Stack.Screen name="index" />
+                <Stack.Screen name="login" />
+                <Stack.Screen name="registro" />
+            </Stack>
+        </>
+    );
 }
