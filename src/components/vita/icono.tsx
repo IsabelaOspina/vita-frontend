@@ -32,6 +32,9 @@ const ICONOS = {
     auditiva: { ios: 'ear.fill', android: 'hearing', web: 'hearing' },
     cognitiva: { ios: 'brain.head.profile', android: 'psychology', web: 'psychology' },
     habla: { ios: 'bubble.left.and.text.bubble.right.fill', android: 'record_voice_over', web: 'record_voice_over' },
+    telefono: { ios: 'phone.fill', android: 'call', web: 'call' },
+    parentesco: { ios: 'person.2.fill', android: 'group', web: 'group' },
+    contactoEmergencia: { ios: 'cross.case.fill', android: 'contact_emergency', web: 'contact_emergency' },
 } satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

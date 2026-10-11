@@ -1,5 +1,5 @@
-import { Link, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { Link, router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, type TextInput } from 'react-native';
 
 import { Aviso } from '@/components/vita/aviso';
@@ -10,13 +10,13 @@ import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { LogoVita } from '@/components/vita/logo-vita';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
-import { useAccesibilidad } from '@/context/accesibilidad-context';
+import { useAccesibilidad, useLeerPantalla } from '@/context/accesibilidad-context';
 import { ApiError } from '@/services/api';
 import { iniciarSesion } from '@/services/authService';
 
 /** Convierte cualquier error en un mensaje entendible para el usuario. */
 function mensajeDeError(e: unknown): string {
-    // El backend respondió con un error (por ejemplo 401 "Correo o contraseña incorrectos")
+    // El backend respondió con un error 
     if (e instanceof ApiError) return e.message;
     // No hubo respuesta: el servidor está apagado, la IP del .env está mal o no hay internet
     return 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.';
@@ -41,6 +41,26 @@ export default function LoginScreen() {
     const [errores, setErrores] = useState<Errores>({});
     const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
     const [bienvenida, setBienvenida] = useState<string | null>(null);
+    // El aviso de "cuenta creada" se toma una sola vez del parámetro y luego vive en el estado,
+    // para poder quitarlo cuando la persona empieza a escribir o inicia sesión
+    const [cuentaCreada, setCuentaCreada] = useState(params.registrado === '1');
+
+    useLeerPantalla(
+        cuentaCreada
+            ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
+            : 'Inicio de sesión. Escribe tu correo y tu contraseña.',
+    );
+
+    // Se borra el parámetro de la dirección para que el aviso no vuelva a aparecer
+    useEffect(() => {
+        if (params.registrado) router.setParams({ registrado: undefined });
+        // Solo al abrir la pantalla
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const ocultarAvisoCuentaCreada = () => {
+        if (cuentaCreada) setCuentaCreada(false);
+    };
     const [cargando, setCargando] = useState(false);
     const contrasenaRef = useRef<TextInput>(null);
 
@@ -49,8 +69,10 @@ export default function LoginScreen() {
         setErrores(encontrados);
         setErrorGeneral(null);
         setBienvenida(null);
+        setCuentaCreada(false);
         if (Object.keys(encontrados).length > 0) {
-            anunciar('Revisa los datos del formulario');
+            // Se leen los errores concretos, no solo un aviso general
+            anunciar(`Revisa el formulario. ${Object.values(encontrados).join('. ')}`);
             return;
         }
 
@@ -97,7 +119,7 @@ export default function LoginScreen() {
                     !altoContraste && styles.sombra,
                 ]}>
                 {bienvenida && <Aviso tipo="exito" mensaje={bienvenida} />}
-                {params.registrado === '1' && !errorGeneral && !bienvenida && (
+                {cuentaCreada && (
                     <Aviso tipo="exito" mensaje="¡Tu cuenta fue creada! Ahora inicia sesión." />
                 )}
                 {errorGeneral && <Aviso mensaje={errorGeneral} />}
@@ -107,7 +129,10 @@ export default function LoginScreen() {
                     icono="correo"
                     placeholder="tucorreo@ejemplo.com"
                     value={correo}
-                    onChangeText={setCorreo}
+                    onChangeText={(texto) => {
+                        setCorreo(texto);
+                        ocultarAvisoCuentaCreada();
+                    }}
                     error={errores.correo}
                     keyboardType="email-address"
                     autoCapitalize="none"
@@ -123,7 +148,10 @@ export default function LoginScreen() {
                     icono="candado"
                     placeholder="Tu contraseña"
                     value={contrasena}
-                    onChangeText={setContrasena}
+                    onChangeText={(texto) => {
+                        setContrasena(texto);
+                        ocultarAvisoCuentaCreada();
+                    }}
                     error={errores.contrasena}
                     esContrasena
                     autoComplete="current-password"

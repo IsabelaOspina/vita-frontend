@@ -25,7 +25,7 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
     { etiqueta, icono, ayuda, error, esContrasena, onFocus, onBlur, ...props },
     ref,
 ) {
-    const { colores, tamano } = useAccesibilidad();
+    const { colores, tamano, leer } = useAccesibilidad();
     const [enfocado, setEnfocado] = useState(false);
     const [oculto, setOculto] = useState(true);
 
@@ -58,6 +58,8 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
                     accessibilityHint={error ?? ayuda}
                     onFocus={(e) => {
                         setEnfocado(true);
+                        // Con modo voz, dice qué campo se está llenando y su error o ayuda
+                        leer([etiqueta, error ?? ayuda].filter(Boolean).join('. '));
                         onFocus?.(e);
                     }}
                     onBlur={(e) => {
