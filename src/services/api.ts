@@ -1,4 +1,14 @@
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(mensaje: string, status: number) {
+    super(mensaje);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 if (!API_URL) {
@@ -56,7 +66,7 @@ export async function apiRequest<T>(
       }
     }
 
-    throw new Error(mensaje);
+    throw new ApiError(mensaje, respuesta.status);
   }
 
   return datos as T;
