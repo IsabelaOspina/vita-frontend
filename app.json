@@ -34,7 +34,14 @@
           "imageWidth": 76
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "VITA necesita acceso al micrófono para escuchar tus comandos de voz.",
+          "speechRecognitionPermission": "VITA utiliza el reconocimiento de voz para comprender tus comandos."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
