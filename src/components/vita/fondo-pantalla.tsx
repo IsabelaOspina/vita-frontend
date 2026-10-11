@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnchoMaximo, Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 
+import { IndicadorAsistente } from './indicador-asistente';
+
 type Props = {
     children: ReactNode;
     /** Contenido fijo abajo (por ejemplo la barra de accesibilidad o un botón). */
@@ -31,9 +33,17 @@ export function FondoPantalla({ children, pie }: Props) {
                         contentContainerStyle={styles.scroll}
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}>
-                        <View style={styles.columna}>{children}</View>
+                        <View style={styles.columna}>
+                            {/* Estado del asistente "Oye VITA" (solo se ve con el modo voz activo) */}
+                            <IndicadorAsistente />
+                            {children}
+                        </View>
                     </ScrollView>
-                    {pie && <View style={[styles.columna, styles.pie]}>{pie}</View>}
+                    {pie && (
+                        <View style={styles.pie}>
+                            <View style={styles.columna}>{pie}</View>
+                        </View>
+                    )}
                 </KeyboardAvoidingView>
             </SafeAreaView>
         </View>
@@ -59,7 +69,6 @@ const styles = StyleSheet.create({
         flexGrow: 1,
     },
     pie: {
-        flexGrow: 0,
         paddingHorizontal: Espacio.xl,
         paddingBottom: Espacio.l,
         paddingTop: Espacio.s,

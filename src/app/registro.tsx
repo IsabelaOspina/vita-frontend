@@ -10,7 +10,8 @@ import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { Icono, type NombreIcono } from '@/components/vita/icono';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
-import { useAccesibilidad, useLeerPantalla } from '@/context/accesibilidad-context';
+import { useAccesibilidad } from '@/context/accesibilidad-context';
+import { useComandosPantalla } from '@/context/asistente-context';
 import type { TipoDiscapacidad } from '@/dto/TipoDiscapacidad';
 import type { ContactoEmergenciaRequest } from '@/dto/ContactoEmergenciaRequest';
 import type { UsuarioRequest } from '@/dto/UsuarioRequest';
@@ -82,11 +83,6 @@ export default function RegistroScreen() {
     const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
     const [cargando, setCargando] = useState(false);
 
-    useLeerPantalla(
-        'Crear cuenta. Escribe tu nombre completo, tu cédula, tu correo y una contraseña. ' +
-        'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad.',
-    );
-
     const cedulaRef = useRef<TextInput>(null);
     const correoRef = useRef<TextInput>(null);
     const contrasenaRef = useRef<TextInput>(null);
@@ -100,6 +96,15 @@ export default function RegistroScreen() {
         );
         // Con modo voz, confirma qué opción se tocó y cómo quedó
         leer(`Discapacidad ${titulo.toLowerCase()}, ${quedaSeleccionada ? 'seleccionada' : 'quitada'}. Es opcional.`);
+    };
+
+    const volver = () => (router.canGoBack() ? router.back() : router.replace('/login'));
+
+    /** Marca o quita una discapacidad sin hablar (el asistente da su propia confirmación). */
+    const cambiarDiscapacidad = (tipo: TipoDiscapacidad, marcar: boolean) => {
+        setDiscapacidades((actuales) =>
+            marcar ? (actuales.includes(tipo) ? actuales : [...actuales, tipo]) : actuales.filter((t) => t !== tipo),
+        );
     };
 
     const enviar = async () => {
@@ -149,11 +154,59 @@ export default function RegistroScreen() {
         !altoContraste && styles.sombra,
     ];
 
+    // Lo que el asistente "Oye VITA" puede hacer en esta pantalla
+    useComandosPantalla({
+        descripcion:
+            'Crear cuenta. Llena tu nombre completo, cédula, correo y una contraseña. ' +
+            'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad.',
+        ejemplos: [
+            'mi nombre es María Gómez',
+            'cédula 1 0 9 4',
+            'mi correo es maría arroba gmail punto com',
+            'el nombre del contacto es Ana',
+            'teléfono del contacto 300 123 4567',
+            'tengo discapacidad visual',
+            'crear cuenta',
+        ],
+        campos: [
+            { claves: ['nombre completo', 'mi nombre', 'nombre'], etiqueta: 'Nombre completo', tipo: 'nombre', valor: nombre, asignar: setNombre },
+            { claves: ['cedula', 'documento', 'numero de cedula'], etiqueta: 'Cédula', tipo: 'numero', valor: cedula, asignar: setCedula },
+            { claves: ['correo electronico', 'correo', 'email', 'mail'], etiqueta: 'Correo electrónico', tipo: 'correo', valor: correo, asignar: setCorreo },
+            { claves: ['contrasena', 'clave'], etiqueta: 'Contraseña', tipo: 'contrasena', valor: contrasena, asignar: setContrasena },
+            {
+                claves: ['nombre del contacto', 'nombre de mi contacto', 'contacto de emergencia', 'contacto'],
+                etiqueta: 'Nombre del contacto',
+                tipo: 'nombre',
+                valor: contactoNombre,
+                asignar: setContactoNombre,
+            },
+            {
+                claves: ['telefono del contacto', 'telefono de mi contacto', 'telefono', 'celular'],
+                etiqueta: 'Teléfono del contacto',
+                tipo: 'numero',
+                valor: contactoTelefono,
+                asignar: setContactoTelefono,
+            },
+            { claves: ['parentesco'], etiqueta: 'Parentesco', tipo: 'texto', valor: contactoParentesco, asignar: setContactoParentesco },
+        ],
+        opciones: DISCAPACIDADES.map((d) => ({
+            claves: d.tipo === 'DEL_HABLA' ? ['del habla', 'habla'] : [d.titulo.toLowerCase()],
+            etiqueta: `Discapacidad ${d.titulo.toLowerCase()}`,
+            marcada: discapacidades.includes(d.tipo),
+            cambiar: (marcar: boolean) => cambiarDiscapacidad(d.tipo, marcar),
+        })),
+        acciones: [
+            { frases: ['crear cuenta', 'crear mi cuenta', 'registrarme', 'enviar', 'terminar'], ejecutar: enviar },
+            { frases: ['iniciar sesion', 'ya tengo cuenta', 'ir al inicio de sesion'], ejecutar: () => router.replace('/login') },
+            { frases: ['volver', 'atras', 'regresar'], ejecutar: volver },
+        ],
+    });
+
     return (
         <FondoPantalla>
             <View style={styles.barraSuperior}>
                 <Pressable
-                    onPress={() => (router.canGoBack() ? router.back() : router.replace('/login'))}
+                    onPress={volver}
                     accessibilityRole="button"
                     accessibilityLabel="Volver"
                     hitSlop={8}

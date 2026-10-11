@@ -2,11 +2,15 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { AccesibilidadProvider, useAccesibilidad } from '@/context/accesibilidad-context';
+import { AsistenteProvider } from '@/context/asistente-context';
 
 export default function RootLayout() {
     return (
         <AccesibilidadProvider>
-            <Navegacion />
+            {/* El asistente "Oye VITA" escucha mientras el modo voz está activo */}
+            <AsistenteProvider>
+                <Navegacion />
+            </AsistenteProvider>
         </AccesibilidadProvider>
     );
 }

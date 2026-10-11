@@ -1,19 +1,16 @@
-import * as Speech from 'expo-speech';
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
 import { EscalasTexto, Paletas, TamanoTexto, type Paleta, type VarianteTexto } from '@/constants/vita-theme';
-
-/** Idioma de la voz. es-MX es la voz en español latino disponible en la mayoría de celulares. */
-const IDIOMA_VOZ = 'es-MX';
+import { callar, hablar } from '@/utils/voz';
 
 /**
  * Preferencias de accesibilidad de la interfaz (alto contraste, tamaño de texto y modo voz).
  * Se pueden cambiar antes de iniciar sesión, desde la barra del login.
  *
- * Modo voz: con expo-speech la app lee en voz alta, sin necesidad de tener activado
- * el lector de pantalla del celular: el nombre de cada pantalla al entrar, cada campo
- * al tocarlo, y los mensajes de error o de éxito.
+ * Modo voz: la app lee en voz alta (sin necesitar el lector de pantalla del celular) el nombre
+ * de cada pantalla, cada campo al tocarlo y los mensajes de error o éxito. Además, mientras está
+ * activo, el asistente "Oye VITA" escucha órdenes (ver asistente-context).
  *
  * Por ahora las preferencias viven en memoria. Cuando exista el servicio de usuario, se pueden
  * inicializar con la configuracionAccesibilidad que devuelve el backend.
@@ -26,7 +23,10 @@ type Accesibilidad = {
     /** Tamaño de fuente ya escalado para una variante de texto. */
     tamano: (variante: VarianteTexto) => number;
     alternarContraste: () => void;
+    /** Recorre los tamaños 100% → 120% → 140% → 100% (botón de la barra). */
     siguienteTamanoTexto: () => void;
+    /** Sube o baja un tamaño (usado por el asistente de voz). Devuelve false si ya estaba en el límite. */
+    cambiarTamanoTexto: (cambio: 'aumentar' | 'disminuir') => boolean;
     alternarModoVoz: () => void;
     /**
      * Comunica un mensaje importante (errores, éxito, cambios de ajustes).
@@ -42,11 +42,6 @@ type Accesibilidad = {
 
 const AccesibilidadContext = createContext<Accesibilidad | null>(null);
 
-function hablar(texto: string, esperar = false) {
-    if (!esperar) Speech.stop();
-    Speech.speak(texto, { language: IDIOMA_VOZ, rate: 0.95 });
-}
-
 export function AccesibilidadProvider({ children }: { children: ReactNode }) {
     const [altoContraste, setAltoContraste] = useState(false);
     const [indiceEscala, setIndiceEscala] = useState(0);
@@ -57,6 +52,11 @@ export function AccesibilidadProvider({ children }: { children: ReactNode }) {
     const anunciar = (mensaje: string) => {
         if (modoVoz) hablar(mensaje);
         else AccessibilityInfo.announceForAccessibility(mensaje);
+    };
+
+    const aplicarEscala = (indice: number) => {
+        setIndiceEscala(indice);
+        anunciar(`Tamaño de texto ${Math.round(EscalasTexto[indice] * 100)} por ciento`);
     };
 
     const valor: Accesibilidad = {
@@ -70,18 +70,20 @@ export function AccesibilidadProvider({ children }: { children: ReactNode }) {
             setAltoContraste(nuevo);
             anunciar(nuevo ? 'Alto contraste activado' : 'Alto contraste desactivado');
         },
-        siguienteTamanoTexto: () => {
-            const siguiente = (indiceEscala + 1) % EscalasTexto.length;
-            setIndiceEscala(siguiente);
-            anunciar(`Tamaño de texto ${Math.round(EscalasTexto[siguiente] * 100)} por ciento`);
+        siguienteTamanoTexto: () => aplicarEscala((indiceEscala + 1) % EscalasTexto.length),
+        cambiarTamanoTexto: (cambio) => {
+            const siguiente = indiceEscala + (cambio === 'aumentar' ? 1 : -1);
+            if (siguiente < 0 || siguiente >= EscalasTexto.length) return false;
+            aplicarEscala(siguiente);
+            return true;
         },
         alternarModoVoz: () => {
             const nuevo = !modoVoz;
             setModoVoz(nuevo);
-            if (nuevo) {
-                hablar('Modo voz activado. Te leeré en voz alta cada campo al tocarlo y los mensajes de la aplicación.');
-            } else {
-                Speech.stop();
+            // El mensaje de bienvenida al activarlo lo dice el asistente, porque depende de si
+            // el reconocimiento de voz está disponible en este dispositivo
+            if (!nuevo) {
+                callar();
                 AccessibilityInfo.announceForAccessibility('Modo voz desactivado');
             }
         },
@@ -100,19 +102,4 @@ export function useAccesibilidad() {
         throw new Error('useAccesibilidad debe usarse dentro de <AccesibilidadProvider>');
     }
     return contexto;
-}
-
-/**
- * Lee la descripción de la pantalla cuando se entra a ella con el modo voz activo,
- * y también justo después de activar el modo voz estando en esa pantalla.
- */
-export function useLeerPantalla(descripcion: string) {
-    const { modoVoz, leer } = useAccesibilidad();
-
-    useEffect(() => {
-        // En cola: si se acaba de activar el modo voz, primero termina ese mensaje
-        if (modoVoz) leer(descripcion, true);
-        // Solo debe volver a leerse cuando cambia el modo voz, no en cada render
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [modoVoz]);
 }

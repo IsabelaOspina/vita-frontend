@@ -10,13 +10,14 @@ import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { LogoVita } from '@/components/vita/logo-vita';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
-import { useAccesibilidad, useLeerPantalla } from '@/context/accesibilidad-context';
+import { useAccesibilidad } from '@/context/accesibilidad-context';
+import { useComandosPantalla } from '@/context/asistente-context';
 import { ApiError } from '@/services/api';
 import { iniciarSesion } from '@/services/authService';
 
 /** Convierte cualquier error en un mensaje entendible para el usuario. */
 function mensajeDeError(e: unknown): string {
-    // El backend respondió con un error 
+    // El backend respondió con un error (por ejemplo 401 "Correo o contraseña incorrectos")
     if (e instanceof ApiError) return e.message;
     // No hubo respuesta: el servidor está apagado, la IP del .env está mal o no hay internet
     return 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.';
@@ -44,12 +45,6 @@ export default function LoginScreen() {
     // El aviso de "cuenta creada" se toma una sola vez del parámetro y luego vive en el estado,
     // para poder quitarlo cuando la persona empieza a escribir o inicia sesión
     const [cuentaCreada, setCuentaCreada] = useState(params.registrado === '1');
-
-    useLeerPantalla(
-        cuentaCreada
-            ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
-            : 'Inicio de sesión. Escribe tu correo y tu contraseña.',
-    );
 
     // Se borra el parámetro de la dirección para que el aviso no vuelva a aparecer
     useEffect(() => {
@@ -93,6 +88,48 @@ export default function LoginScreen() {
             setCargando(false);
         }
     };
+
+    // Lo que el asistente "Oye VITA" puede hacer en esta pantalla
+    useComandosPantalla({
+        descripcion: cuentaCreada
+            ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
+            : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA.',
+        ejemplos: [
+            'mi correo es isabela arroba gmail punto com',
+            'mi contraseña es, y la dices',
+            'iniciar sesión',
+            'quiero registrarme',
+        ],
+        campos: [
+            {
+                claves: ['correo electronico', 'correo', 'email', 'mail'],
+                etiqueta: 'Correo electrónico',
+                tipo: 'correo',
+                valor: correo,
+                asignar: (valor) => {
+                    setCorreo(valor);
+                    ocultarAvisoCuentaCreada();
+                },
+            },
+            {
+                claves: ['contrasena', 'clave'],
+                etiqueta: 'Contraseña',
+                tipo: 'contrasena',
+                valor: contrasena,
+                asignar: (valor) => {
+                    setContrasena(valor);
+                    ocultarAvisoCuentaCreada();
+                },
+            },
+        ],
+        acciones: [
+            { frases: ['iniciar sesion', 'inicia sesion', 'entrar', 'ingresar'], ejecutar: enviar },
+            {
+                frases: ['registrarme', 'registrar', 'crear cuenta', 'crear una cuenta', 'ir a registro', 'registro'],
+                ejecutar: () => router.push('/registro'),
+            },
+        ],
+    });
 
     return (
         <FondoPantalla>
