@@ -11,9 +11,10 @@ import { Icono, type NombreIcono } from '@/components/vita/icono';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
-
-/** Mismos valores que el enum TipoDiscapacidad del backend. */
-type TipoDiscapacidad = 'VISUAL' | 'AUDITIVA' | 'COGNITIVA' | 'DEL_HABLA';
+import type { TipoDiscapacidad } from '@/dto/TipoDiscapacidad';
+import type { UsuarioRequest } from '@/dto/UsuarioRequest';
+import { ApiError } from '@/services/api';
+import { registrarUsuario } from '@/services/usuarioService';
 
 const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIcono }[] = [
     { tipo: 'VISUAL', titulo: 'Visual', icono: 'visual' },
@@ -22,28 +23,17 @@ const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIco
     { tipo: 'DEL_HABLA', titulo: 'Del habla', icono: 'habla' },
 ];
 
-/** Datos con la misma forma que UsuarioRequest del backend (POST /api/usuarios). */
-type DatosRegistro = {
-    nombre: string;
-    cedula: string;
-    correo: string;
-    contrasena: string;
-    discapacidades: { tipo: TipoDiscapacidad }[];
-};
-
-/**
- * TEMPORAL: simula el registro para poder probar la pantalla.
- * Reemplazar por el servicio que hace POST /api/usuarios con `datos`.
- * Si el backend responde error (por ejemplo "Ya existe un usuario con ese correo"),
- * lanzar un Error con el "mensaje" que trae la respuesta.
- */
-async function registrarTemporal(_datos: DatosRegistro): Promise<void> {
-    await new Promise((resolver) => setTimeout(resolver, 1000));
+/** Convierte cualquier error en un mensaje entendible para el usuario. */
+function mensajeDeError(e: unknown): string {
+    // El backend respondió con un error (por ejemplo "Ya existe un usuario con ese correo")
+    if (e instanceof ApiError) return e.message;
+    // No hubo respuesta: el servidor está apagado, la IP del .env está mal o no hay internet
+    return 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.';
 }
 
 type Errores = Partial<Record<'nombre' | 'cedula' | 'correo' | 'contrasena', string>>;
 
-function validar(d: Omit<DatosRegistro, 'discapacidades'>): Errores {
+function validar(d: Pick<UsuarioRequest, 'nombre' | 'cedula' | 'correo' | 'contrasena'>): Errores {
     const errores: Errores = {};
     if (!d.nombre.trim()) errores.nombre = 'Escribe tu nombre completo';
     if (!d.cedula.trim()) errores.cedula = 'Escribe tu número de cédula';
@@ -87,7 +77,7 @@ export default function RegistroScreen() {
 
         setCargando(true);
         try {
-            await registrarTemporal({
+            await registrarUsuario({
                 nombre: nombre.trim(),
                 cedula: cedula.trim(),
                 correo: correo.trim(),
@@ -96,7 +86,7 @@ export default function RegistroScreen() {
             });
             router.replace({ pathname: '/login', params: { correo: correo.trim(), registrado: '1' } });
         } catch (e) {
-            const mensaje = e instanceof Error ? e.message : 'No pudimos crear tu cuenta. Intenta de nuevo.';
+            const mensaje = mensajeDeError(e);
             setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {

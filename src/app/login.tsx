@@ -11,16 +11,15 @@ import { LogoVita } from '@/components/vita/logo-vita';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
+import { ApiError } from '@/services/api';
+import { iniciarSesion } from '@/services/authService';
 
-/**
- * TEMPORAL: simula la llamada al backend para poder probar la pantalla.
- * Reemplazar por el servicio de autenticación (POST /api/auth/login),
- * que debe guardar el token y devolver los datos del usuario.
- * Si el backend responde error, lanzar un Error con el "mensaje" que trae la respuesta.
- */
-async function iniciarSesionTemporal(correo: string, _contrasena: string): Promise<{ nombre: string }> {
-    await new Promise((resolver) => setTimeout(resolver, 900));
-    return { nombre: correo.split('@')[0] };
+/** Convierte cualquier error en un mensaje entendible para el usuario. */
+function mensajeDeError(e: unknown): string {
+    // El backend respondió con un error (por ejemplo 401 "Correo o contraseña incorrectos")
+    if (e instanceof ApiError) return e.message;
+    // No hubo respuesta: el servidor está apagado, la IP del .env está mal o no hay internet
+    return 'No pudimos conectarnos con el servidor. Revisa tu conexión e intenta de nuevo.';
 }
 
 type Errores = { correo?: string; contrasena?: string };
@@ -57,13 +56,15 @@ export default function LoginScreen() {
 
         setCargando(true);
         try {
-            const usuario = await iniciarSesionTemporal(correo.trim(), contrasena);
+            // authService guarda el token y devuelve el usuario
+            const respuesta = await iniciarSesion({ correo: correo.trim(), contrasena });
+            const primerNombre = respuesta.usuario.nombre.split(' ')[0];
             // TODO: cuando exista el panel principal, navegar a él en lugar de mostrar este mensaje
-            const mensaje = `¡Bienvenido, ${usuario.nombre}! Iniciaste sesión correctamente.`;
+            const mensaje = `¡Bienvenido, ${primerNombre}! Iniciaste sesión correctamente.`;
             setBienvenida(mensaje);
             anunciar(mensaje);
         } catch (e) {
-            const mensaje = e instanceof Error ? e.message : 'No pudimos iniciar sesión. Intenta de nuevo.';
+            const mensaje = mensajeDeError(e);
             setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {

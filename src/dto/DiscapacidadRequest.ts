@@ -1,10 +1,6 @@
-import type { Rol } from "./Rol";
+import type { TipoDiscapacidad } from "./TipoDiscapacidad";
 
-export interface PersonalRequest {
-  cedula: string;
-  nombre: string;
-  correo: string;
-  contrasena: string;
-  telefono?: string;
-  rol: Rol;
+export interface DiscapacidadRequest {
+  tipo: TipoDiscapacidad;
+  descripcion?: string;
 }
