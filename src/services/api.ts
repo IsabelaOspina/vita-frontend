@@ -25,6 +25,10 @@ export async function apiRequest<T>(
     body: body ? JSON.stringify(body) : undefined,
   });
 
+  if (respuesta.status === 204) {
+    return undefined as T;
+  }
+
   const texto = await respuesta.text();
 
   let datos: unknown;
