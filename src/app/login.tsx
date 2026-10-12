@@ -91,19 +91,21 @@ export default function LoginScreen() {
 
     // Lo que el asistente "Oye VITA" puede hacer en esta pantalla
     useComandosPantalla({
+        titulo: 'Inicio de sesión',
         descripcion: cuentaCreada
             ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
             : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA.',
         ejemplos: [
-            'mi correo es isabela arroba gmail punto com',
+            'mi correo es maria arroba gmail punto com',
             'mi contraseña es, y la dices',
-            'iniciar sesión',
+            'o todo junto: mi correo es …, y mi contraseña es …, e inicia sesión',
             'quiero registrarme',
         ],
         campos: [
             {
                 claves: ['correo electronico', 'correo', 'email', 'mail'],
                 etiqueta: 'Correo electrónico',
+                pregunta: '¿Cuál es tu correo electrónico?',
                 tipo: 'correo',
                 valor: correo,
                 asignar: (valor) => {
@@ -114,6 +116,7 @@ export default function LoginScreen() {
             {
                 claves: ['contrasena', 'clave'],
                 etiqueta: 'Contraseña',
+                pregunta: '¿Cuál es tu contraseña?',
                 tipo: 'contrasena',
                 valor: contrasena,
                 asignar: (valor) => {
@@ -123,7 +126,7 @@ export default function LoginScreen() {
             },
         ],
         acciones: [
-            { frases: ['iniciar sesion', 'inicia sesion', 'entrar', 'ingresar'], ejecutar: enviar },
+            { frases: ['iniciar sesion', 'inicia sesion', 'entrar', 'ingresar'], etiqueta: 'iniciar sesión', ejecutar: enviar },
             {
                 frases: ['registrarme', 'registrar', 'crear cuenta', 'crear una cuenta', 'ir a registro', 'registro'],
                 ejecutar: () => router.push('/registro'),
@@ -151,7 +154,6 @@ export default function LoginScreen() {
                     {
                         backgroundColor: colores.superficie,
                         borderColor: altoContraste ? colores.borde : 'transparent',
-                        shadowColor: colores.sombra,
                     },
                     !altoContraste && styles.sombra,
                 ]}>
@@ -236,10 +238,7 @@ const styles = StyleSheet.create({
         gap: Espacio.l,
     },
     sombra: {
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.08,
-        shadowRadius: 24,
-        elevation: 4,
+        boxShadow: '0px 12px 24px rgba(31, 58, 107, 0.08)',
     },
     registro: {
         flexDirection: 'row',

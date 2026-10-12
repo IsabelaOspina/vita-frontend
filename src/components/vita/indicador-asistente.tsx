@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
-import { Espacio, Radio } from '@/constants/vita-theme';
+import { AltoTactil, Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useAsistente, type EstadoAsistente } from '@/context/asistente-context';
 
@@ -8,18 +8,20 @@ import { Icono } from './icono';
 import { Texto } from './texto';
 
 const TEXTO_POR_ESTADO: Record<Exclude<EstadoAsistente, 'apagado'>, string> = {
-    esperando: 'Di «Oye VITA»',
+    esperando: 'Di «Oye VITA» o toca aquí',
     atento: 'Te escucho…',
-    hablando: 'VITA está hablando…',
+    hablando: 'VITA está hablando · toca para interrumpir',
 };
 
 /**
  * Muestra en qué estado está el asistente de voz, arriba a la derecha de cada pantalla.
- * Tocarlo equivale a decir "Oye VITA" (útil si el micrófono no reconoce bien la frase).
+ *
+ * Es un botón grande: tocarlo equivale a decir "Oye VITA" (útil si el micrófono no reconoce
+ * bien la frase) y, si VITA está hablando, la interrumpe.
  */
 export function IndicadorAsistente() {
     const { estado, prestarAtencion } = useAsistente();
-    const { colores } = useAccesibilidad();
+    const { colores, altoContraste } = useAccesibilidad();
 
     if (estado === 'apagado') return null;
 
@@ -29,30 +31,36 @@ export function IndicadorAsistente() {
         <View style={styles.fila}>
             <Pressable
                 onPress={prestarAtencion}
-                disabled={estado !== 'esperando'}
                 accessibilityRole="button"
-                accessibilityLabel={`Asistente de voz: ${TEXTO_POR_ESTADO[estado]}`}
-                accessibilityHint="Toca para darle una orden al asistente sin decir Oye VITA"
-                accessibilityLiveRegion="polite"
+                accessibilityLabel={estado === 'hablando' ? 'Interrumpir a VITA y darle una orden' : 'Hablar con VITA'}
+                accessibilityHint={
+                    Platform.OS === 'web'
+                        ? 'Equivale a decir Oye VITA. Atajo de teclado: Alt más V'
+                        : 'Equivale a decir Oye VITA'
+                }
                 style={({ pressed }) => [
                     styles.pastilla,
                     {
                         backgroundColor: destacado ? colores.primario : colores.superficie,
                         borderColor: colores.primario,
-                        shadowColor: colores.sombra,
                     },
+                    !altoContraste && styles.sombra,
                     pressed && { opacity: 0.8 },
                 ]}>
                 <View style={[styles.punto, { backgroundColor: destacado ? colores.sobrePrimario : colores.acento }]} />
                 <Icono
                     nombre={estado === 'hablando' ? 'habla' : 'microfono'}
-                    tamano={18}
+                    tamano={20}
                     color={destacado ? colores.sobrePrimario : colores.primario}
                 />
-                <Texto variante="pequeno" peso="700" style={{ color: destacado ? colores.sobrePrimario : colores.texto }}>
+                <Texto
+                    variante="pequeno"
+                    peso="700"
+                    style={[styles.textoPastilla, { color: destacado ? colores.sobrePrimario : colores.texto }]}>
                     {TEXTO_POR_ESTADO[estado]}
                 </Texto>
             </Pressable>
+
         </View>
     );
 }
@@ -63,21 +71,25 @@ const styles = StyleSheet.create({
         marginBottom: Espacio.m,
     },
     pastilla: {
+        minHeight: AltoTactil,
+        maxWidth: '100%',
         flexDirection: 'row',
         alignItems: 'center',
         gap: Espacio.s,
         paddingVertical: Espacio.s,
-        paddingHorizontal: Espacio.m,
+        paddingHorizontal: Espacio.l,
         borderRadius: Radio.total,
-        borderWidth: 1.5,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.12,
-        shadowRadius: 10,
-        elevation: 4,
+        borderWidth: 2,
+    },
+    sombra: {
+        boxShadow: '0px 4px 10px rgba(31, 58, 107, 0.12)',
+    },
+    textoPastilla: {
+        flexShrink: 1,
     },
     punto: {
-        width: 8,
-        height: 8,
+        width: 10,
+        height: 10,
         borderRadius: Radio.total,
     },
 });

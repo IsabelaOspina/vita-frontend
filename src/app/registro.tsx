@@ -149,45 +149,103 @@ export default function RegistroScreen() {
         {
             backgroundColor: colores.superficie,
             borderColor: altoContraste ? colores.borde : 'transparent',
-            shadowColor: colores.sombra,
         },
         !altoContraste && styles.sombra,
     ];
 
     // Lo que el asistente "Oye VITA" puede hacer en esta pantalla
     useComandosPantalla({
+        titulo: 'Crear cuenta',
         descripcion:
             'Crear cuenta. Llena tu nombre completo, cédula, correo y una contraseña. ' +
             'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad.',
         ejemplos: [
-            'mi nombre es María Gómez',
-            'cédula 1 0 9 4',
-            'mi correo es maría arroba gmail punto com',
+            'mi nombre es María Gómez y mi cédula es 1 0 9 4 6 9 9 7',
+            'mi correo es maría arroba gmail punto com y mi contraseña es girasol 2026',
             'el nombre del contacto es Ana',
             'teléfono del contacto 300 123 4567',
+            'quiero agregar un contacto de emergencia',
             'tengo discapacidad visual',
             'crear cuenta',
         ],
         campos: [
-            { claves: ['nombre completo', 'mi nombre', 'nombre'], etiqueta: 'Nombre completo', tipo: 'nombre', valor: nombre, asignar: setNombre },
-            { claves: ['cedula', 'documento', 'numero de cedula'], etiqueta: 'Cédula', tipo: 'numero', valor: cedula, asignar: setCedula },
-            { claves: ['correo electronico', 'correo', 'email', 'mail'], etiqueta: 'Correo electrónico', tipo: 'correo', valor: correo, asignar: setCorreo },
-            { claves: ['contrasena', 'clave'], etiqueta: 'Contraseña', tipo: 'contrasena', valor: contrasena, asignar: setContrasena },
             {
-                claves: ['nombre del contacto', 'nombre de mi contacto', 'contacto de emergencia', 'contacto'],
+                claves: ['nombre completo', 'mi nombre', 'nombre'],
+                etiqueta: 'Nombre completo',
+                pregunta: '¿Cuál es tu nombre completo?',
+                tipo: 'nombre',
+                valor: nombre,
+                asignar: setNombre,
+            },
+            {
+                claves: ['numero de cedula', 'cedula', 'documento'],
+                etiqueta: 'Cédula',
+                pregunta: '¿Cuál es tu número de cédula?',
+                tipo: 'numero',
+                valor: cedula,
+                asignar: setCedula,
+            },
+            {
+                claves: ['correo electronico', 'correo', 'email', 'mail'],
+                etiqueta: 'Correo electrónico',
+                pregunta: '¿Cuál es tu correo electrónico?',
+                tipo: 'correo',
+                valor: correo,
+                asignar: setCorreo,
+            },
+            {
+                claves: ['contrasena', 'clave'],
+                etiqueta: 'Contraseña',
+                pregunta: '¿Qué contraseña quieres? Debe tener al menos 8 caracteres.',
+                tipo: 'contrasena',
+                valor: contrasena,
+                asignar: setContrasena,
+            },
+            {
+                claves: [
+                    'nombre del contacto de emergencia',
+                    'nombre de contacto de emergencia',
+                    'nombre de mi contacto de emergencia',
+                    'nombre de mi contacto',
+                    'nombre del contacto',
+                    'nombre de contacto',
+                    'contacto de emergencia',
+                    'contacto',
+                ],
                 etiqueta: 'Nombre del contacto',
+                pregunta: '¿Cómo se llama tu contacto de emergencia?',
                 tipo: 'nombre',
                 valor: contactoNombre,
                 asignar: setContactoNombre,
+                opcional: true,
             },
             {
-                claves: ['telefono del contacto', 'telefono de mi contacto', 'telefono', 'celular'],
+                claves: [
+                    'telefono del contacto de emergencia',
+                    'telefono de mi contacto',
+                    'telefono del contacto',
+                    'telefono de contacto',
+                    'celular del contacto',
+                    'numero del contacto',
+                    'telefono',
+                    'celular',
+                ],
                 etiqueta: 'Teléfono del contacto',
+                pregunta: '¿Cuál es el teléfono de tu contacto?',
                 tipo: 'numero',
                 valor: contactoTelefono,
                 asignar: setContactoTelefono,
+                opcional: true,
             },
-            { claves: ['parentesco'], etiqueta: 'Parentesco', tipo: 'texto', valor: contactoParentesco, asignar: setContactoParentesco },
+            {
+                claves: ['parentesco', 'relacion'],
+                etiqueta: 'Parentesco',
+                pregunta: '¿Qué parentesco tiene contigo? Por ejemplo: mamá, hermano o amiga.',
+                tipo: 'texto',
+                valor: contactoParentesco,
+                asignar: setContactoParentesco,
+                opcional: true,
+            },
         ],
         opciones: DISCAPACIDADES.map((d) => ({
             claves: d.tipo === 'DEL_HABLA' ? ['del habla', 'habla'] : [d.titulo.toLowerCase()],
@@ -195,8 +253,20 @@ export default function RegistroScreen() {
             marcada: discapacidades.includes(d.tipo),
             cambiar: (marcar: boolean) => cambiarDiscapacidad(d.tipo, marcar),
         })),
+        // Al terminar los datos obligatorios, el asistente ofrece los opcionales antes de crear la cuenta
+        pasosOpcionales: [
+            {
+                pregunta: 'Ya tengo tus datos principales. ¿Quieres agregar un contacto de emergencia? Di sí o no.',
+                campos: ['Nombre del contacto', 'Teléfono del contacto', 'Parentesco'],
+            },
+            {
+                pregunta: '¿Quieres contarnos si tienes alguna discapacidad? Di sí o no.',
+                siAcepta: '¿Cuál? Puedes decir visual, auditiva, cognitiva o del habla. Puedes decir varias.',
+                opciones: true,
+            },
+        ],
         acciones: [
-            { frases: ['crear cuenta', 'crear mi cuenta', 'registrarme', 'enviar', 'terminar'], ejecutar: enviar },
+            { frases: ['crear cuenta', 'crear mi cuenta', 'registrarme', 'enviar', 'terminar'], etiqueta: 'crear la cuenta', ejecutar: enviar },
             { frases: ['iniciar sesion', 'ya tengo cuenta', 'ir al inicio de sesion'], ejecutar: () => router.replace('/login') },
             { frases: ['volver', 'atras', 'regresar'], ejecutar: volver },
         ],
@@ -432,10 +502,7 @@ const styles = StyleSheet.create({
         gap: Espacio.l,
     },
     sombra: {
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.08,
-        shadowRadius: 24,
-        elevation: 4,
+        boxShadow: '0px 12px 24px rgba(31, 58, 107, 0.08)',
     },
     filaTitulo: {
         flexDirection: 'row',

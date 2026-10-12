@@ -20,7 +20,6 @@ export function LogoVita({ compacto = false }: { compacto?: boolean }) {
                         width: diametro,
                         height: diametro,
                         backgroundColor: colores.primario,
-                        shadowColor: colores.primario,
                     },
                     !altoContraste && styles.sombra,
                 ]}>
@@ -58,10 +57,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     sombra: {
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.3,
-        shadowRadius: 18,
-        elevation: 8,
+        boxShadow: '0px 10px 18px rgba(31, 111, 235, 0.3)',
     },
     punto: {
         position: 'absolute',

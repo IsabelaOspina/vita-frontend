@@ -36,7 +36,6 @@ export function Boton({ titulo, onPress, variante = 'primario', icono, cargando,
                 esPrimario
                     ? {
                         backgroundColor: pressed ? colores.primarioPresionado : colores.primario,
-                        shadowColor: colores.primario,
                     }
                     : {
                         backgroundColor: pressed ? colores.superficieSuave : colores.superficie,
@@ -70,10 +69,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     sombra: {
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.28,
-        shadowRadius: 16,
-        elevation: 6,
+        boxShadow: '0px 8px 16px rgba(31, 111, 235, 0.28)',
     },
     contenido: {
         flexDirection: 'row',

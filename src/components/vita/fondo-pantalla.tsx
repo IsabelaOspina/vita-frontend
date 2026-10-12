@@ -24,8 +24,8 @@ export function FondoPantalla({ children, pie }: Props) {
         // overflow hidden: recorta las formas decorativas para que no generen scroll horizontal en web
         <View style={[styles.raiz, styles.recorte, { backgroundColor: colores.fondo }]}>
             {/* Formas decorativas; en alto contraste son transparentes */}
-            <View pointerEvents="none" style={[styles.forma, styles.formaA, { backgroundColor: colores.decoracionA }]} />
-            <View pointerEvents="none" style={[styles.forma, styles.formaB, { backgroundColor: colores.decoracionB }]} />
+            <View style={[styles.forma, styles.formaA, styles.sinToques, { backgroundColor: colores.decoracionA }]} />
+            <View style={[styles.forma, styles.formaB, styles.sinToques, { backgroundColor: colores.decoracionB }]} />
 
             <SafeAreaView style={styles.raiz} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView style={styles.raiz} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -51,6 +51,10 @@ export function FondoPantalla({ children, pie }: Props) {
 }
 
 const styles = StyleSheet.create({
+    // Las formas decorativas no reciben toques
+    sinToques: {
+        pointerEvents: 'none',
+    },
     raiz: {
         flex: 1,
     },
