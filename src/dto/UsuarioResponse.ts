@@ -3,6 +3,7 @@ import type { Rol } from "./Rol";
 import type { ContactoEmergenciaResponse } from "./ContactoEmergenciaResponse";
 import type { DiscapacidadResponse } from "./DiscapacidadResponse";
 import type { ConfiguracionAccesibilidadResponse } from "./ConfiguracionAccesibilidadResponse";
+import type { PersonalSaludResponse } from "./PersonalSaludResponse";
 
 export interface UsuarioResponse {
   id: number;
@@ -17,4 +18,5 @@ export interface UsuarioResponse {
   contactoEmergencia: ContactoEmergenciaResponse | null;
   discapacidades: DiscapacidadResponse[];
   configuracionAccesibilidad: ConfiguracionAccesibilidadResponse | null;
+  personalSalud: PersonalSaludResponse | null;
 }
