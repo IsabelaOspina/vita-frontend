@@ -7,6 +7,7 @@ export default function PacienteLayout() {
     return (
         <Pestanas>
             <Tabs.Screen name="index" options={pestana('Inicio', 'casa')} />
+            <Tabs.Screen name="sintomas" options={pestana('Síntomas', 'sintomas', 'Mis síntomas')} />
             <Tabs.Screen name="accesibilidad" options={pestana('Ajustes', 'ajustes', 'Ajustes de accesibilidad')} />
             <Tabs.Screen name="mi-cuenta" options={pestana('Mi cuenta', 'persona')} />
         </Pestanas>

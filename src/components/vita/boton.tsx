@@ -9,7 +9,8 @@ import { Texto } from './texto';
 type Props = {
     titulo: string;
     onPress: () => void;
-    variante?: 'primario' | 'secundario';
+    /** "peligro": rojo, para acciones que no se pueden deshacer (eliminar). */
+    variante?: 'primario' | 'secundario' | 'peligro';
     icono?: NombreIcono;
     cargando?: boolean;
     deshabilitado?: boolean;
@@ -19,9 +20,11 @@ type Props = {
 
 export function Boton({ titulo, onPress, variante = 'primario', icono, cargando, deshabilitado, pista }: Props) {
     const { colores, altoContraste } = useAccesibilidad();
-    const esPrimario = variante === 'primario';
+    const esPeligro = variante === 'peligro';
+    const esPrimario = variante === 'primario' || esPeligro;
     const inactivo = deshabilitado || cargando;
     const colorContenido = esPrimario ? colores.sobrePrimario : colores.primario;
+    const fondo = esPeligro ? colores.error : colores.primario;
 
     return (
         <Pressable
@@ -35,14 +38,14 @@ export function Boton({ titulo, onPress, variante = 'primario', icono, cargando,
                 styles.base,
                 esPrimario
                     ? {
-                        backgroundColor: pressed ? colores.primarioPresionado : colores.primario,
+                        backgroundColor: pressed && !esPeligro ? colores.primarioPresionado : fondo,
                     }
                     : {
                         backgroundColor: pressed ? colores.superficieSuave : colores.superficie,
                         borderWidth: 2,
                         borderColor: colores.primario,
                     },
-                esPrimario && !altoContraste && styles.sombra,
+                esPrimario && !esPeligro && !altoContraste && styles.sombra,
                 pressed && styles.presionado,
                 inactivo && styles.inactivo,
             ]}>

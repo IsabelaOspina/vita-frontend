@@ -17,6 +17,16 @@ export function salir(anunciar: (mensaje: string) => void) {
 export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void): AccionVoz[] {
     const rutas = rutasDe(rol);
     return [
+        // Solo el paciente tiene la pestaña "Síntomas"
+        ...(rol === 'USUARIO'
+            ? [
+                {
+                    frases: ['ve a sintomas', 'ir a sintomas', 'abre sintomas', 've a mis sintomas', 'ir a mis sintomas', 'abre mis sintomas', 'pestana sintomas'],
+                    etiqueta: 'ir a mis síntomas',
+                    ejecutar: () => router.navigate('/paciente/sintomas'),
+                },
+            ]
+            : []),
         {
             frases: ['ve a mi cuenta', 'ir a mi cuenta', 'abre mi cuenta', 'mi cuenta', 'mis datos', 'mi perfil', 'mi informacion'],
             etiqueta: 'ir a mi cuenta',

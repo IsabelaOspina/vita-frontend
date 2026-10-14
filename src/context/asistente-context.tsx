@@ -105,6 +105,7 @@ const ESPERA_MICROFONO_MS = 250;
 const PALABRAS_CLAVE = [
     'Oye VITA', 'VITA', 'arroba', 'punto com', 'gmail', 'hotmail', 'outlook', 'contraseña', 'correo',
     'cédula', 'iniciar sesión', 'crear cuenta', 'contacto de emergencia', 'parentesco', 'deletrea',
+    'síntoma', 'síntomas', 'intensidad', 'evolución', 'náuseas', 'mareo',
 ];
 
 /** Respuestas que confirman una pregunta de sí o no. */
@@ -470,8 +471,8 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     hablar(
                         `${lista.nombre}: ${cantidad === 1 ? 'hay uno' : `hay ${cantidad}`}. ` +
                         lista.elementos
-                            .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`)
-                            .join('. '),
+                            .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`.replace(/\.$/, ''))
+                            .join('. ') + '.',
                     );
                     break;
                 }
@@ -493,9 +494,17 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 case 'elementoNoEncontrado':
                     hablar(`No encontré a ${resultado.buscado} en ${resultado.lista.nombre.toLowerCase()}. Puedes decir: ${resultado.lista.claves[0]}, para escucharla.`);
                     break;
-                case 'accion':
+                case 'accion': {
+                    // Las acciones delicadas (eliminar un síntoma) se confirman antes; las demás se hacen en ejecutarVarias
+                    const { accion } = resultado;
+                    if (accion.confirmar) {
+                        hablar(`Responde sí o no. ${accion.confirmar}`);
+                        confirmarRef.current = { tipo: 'funcion', ejecutar: accion.ejecutar };
+                    }
+                    break;
+                }
                 case 'noEntendido':
-                    // Se atienden en ejecutarVarias
+                    // Se atiende en ejecutarVarias
                     break;
             }
         },
@@ -510,7 +519,10 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
     const ejecutarVarias = useCallback(
         (resultados: Resultado[]) => {
             const entendidos = resultados.filter((r) => r.tipo !== 'noEntendido');
-            const accionesPantalla = resultados.filter((r): r is Extract<Resultado, { tipo: 'accion' }> => r.tipo === 'accion');
+            // Las acciones que piden confirmación ("¿Seguro que quieres eliminar…?") no se hacen todavía
+            const accionesPantalla = resultados.filter(
+                (r): r is Extract<Resultado, { tipo: 'accion' }> => r.tipo === 'accion' && !r.accion.confirmar,
+            );
             // Acciones sobre elementos que se hacen de una vez (sin confirmar), por ejemplo "ver a Ana"
             const accionesElemento = resultados.filter(
                 (r): r is Extract<Resultado, { tipo: 'accionElemento' }> =>
@@ -643,7 +655,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     }
                 }
 
-                let resultados = interpretarVarias(orden, pantalla);
+                let resultados = interpretarVarias(orden, pantalla, campoPendienteRef.current);
 
                 // Respuesta a "¿Cuál es tu contraseña?": lo dicho es el valor del campo
                 const pendiente = pantalla?.campos.find((c) => c.etiqueta === campoPendienteRef.current);
@@ -675,7 +687,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
         // Conversación sin "Oye VITA" (se ignora) o solo "Oye VITA" (responde "Dime")
         if (orden === null || !orden) return true;
         if (confirmarRef.current && (SI.test(aPalabras(orden)) || NO.test(aPalabras(orden)))) return true;
-        const resultados = interpretarVarias(orden, pantallaActual());
+        const resultados = interpretarVarias(orden, pantallaActual(), campoPendienteRef.current);
         if (resultados.some((r) => r.tipo === 'pedirCampo')) return false;
         if (resultados.every((r) => r.tipo === 'noEntendido')) return campoPendienteRef.current !== null;
         const ultimo = resultados[resultados.length - 1];

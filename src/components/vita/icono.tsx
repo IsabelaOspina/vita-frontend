@@ -46,6 +46,14 @@ const ICONOS = {
     insignia: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' },
     recargar: { ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' },
     casa: { ios: 'house.fill', android: 'home', web: 'home' },
+    editar: { ios: 'pencil', android: 'edit', web: 'edit' },
+    eliminar: { ios: 'trash.fill', android: 'delete', web: 'delete' },
+    grafica: { ios: 'chart.xyaxis.line', android: 'show_chart', web: 'show_chart' },
+    reloj: { ios: 'clock.fill', android: 'schedule', web: 'schedule' },
+    nota: { ios: 'note.text', android: 'notes', web: 'notes' },
+    mejorando: { ios: 'arrow.down.right', android: 'trending_down', web: 'trending_down' },
+    empeorando: { ios: 'arrow.up.right', android: 'trending_up', web: 'trending_up' },
+    estable: { ios: 'arrow.right', android: 'trending_flat', web: 'trending_flat' },
 } satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

@@ -38,6 +38,8 @@ export type AccionVoz = {
     frases: string[];
     /** Cómo la nombra el asistente al ofrecerla ("¿Quieres crear la cuenta?"). */
     etiqueta?: string;
+    /** Si existe, antes de hacerla se pregunta esto ("¿Seguro que quieres eliminar este síntoma?"). */
+    confirmar?: string;
     ejecutar: () => void;
 };
 
@@ -59,6 +61,13 @@ export type PantallaVoz = {
     pasosOpcionales?: PasoOpcional[];
     /** Listas que se pueden leer y sobre cuyos elementos se puede actuar ("desactiva a Ana Gómez"). */
     listas?: ListaVoz[];
+    /**
+     * Frases libres propias de la pantalla que no siguen la forma "campo es valor", por ejemplo
+     * "registra dolor de cabeza intensidad 7". Se prueba antes que todo lo demás: devuelve qué
+     * hacer, o null para que la frase se interprete de la forma normal.
+     * `pendiente` es la etiqueta del campo por el que VITA acaba de preguntar (si hay uno).
+     */
+    dictado?: (texto: string, pendiente: string | null) => Resultado[] | null;
 };
 
 /** Un elemento de una lista (una cuenta, un paciente, un profesional…). */
@@ -554,7 +563,11 @@ const VERBO_OPCION = /(tengo|marca|marcar|selecciona|seleccionar|agrega|agregar|
  * por sí sola. Así "mi nombre es María y José" no se parte (José no es una orden), pero
  * "mi correo es … y mi contraseña es …" sí.
  */
-export function interpretarVarias(orden: string, pantalla: PantallaVoz | null): Resultado[] {
+export function interpretarVarias(orden: string, pantalla: PantallaVoz | null, pendiente: string | null = null): Resultado[] {
+    // Lo que la pantalla entiende por su cuenta ("registra dolor de cabeza intensidad 7")
+    const dictado = pantalla?.dictado?.(limpiarBordes(orden.trim()), pendiente);
+    if (dictado?.length) return dictado;
+
     const palabras = limpiarBordes(orden.trim()).split(/\s+/).filter(Boolean);
 
     // Trozos separados en cada conector, recordando qué conector había para poder volver a unirlos

@@ -1,4 +1,4 @@
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -48,12 +48,16 @@ export default function MisPacientesScreen() {
         }, [cargar]),
     );
 
+    /** Abre los síntomas de un paciente (solo consulta). */
+    const abrir = (p: AsignacionResponse) =>
+        router.push({ pathname: '/personal/paciente/[id]', params: { id: String(p.pacienteId), nombre: p.pacienteNombre } });
+
     useComandosPantalla({
         titulo: 'Mis pacientes',
         descripcion:
-            'Mis pacientes. Aquí están los pacientes que tienes asignados. ' +
-            'Puedes decir: mis pacientes, mi cuenta, accesibilidad o cerrar sesión.',
-        ejemplos: ['mis pacientes', 'mi cuenta', 'accesibilidad', 'cerrar sesión'],
+            'Mis pacientes. Aquí están los pacientes que tienes asignados; toca uno para ver sus síntomas. ' +
+            'Puedes decir: mis pacientes, abre a un paciente por su nombre, mi cuenta o cerrar sesión.',
+        ejemplos: ['mis pacientes', ...(pacientes[0] ? [`abre a ${primerNombre(pacientes[0].pacienteNombre)}`] : []), 'mi cuenta', 'cerrar sesión'],
         campos: [],
         listas: [
             {
@@ -61,6 +65,12 @@ export default function MisPacientesScreen() {
                 nombre: 'Tus pacientes',
                 vacia: 'Todavía no tienes pacientes asignados.',
                 elementos: pacientes.map((p) => ({ nombre: p.pacienteNombre, detalle: `asignado el ${fechaLarga(p.fechaAsignacion)}` })),
+                acciones: [
+                    {
+                        frases: ['abre', 'abrir', 'ver', 'muestra', 'sintomas de', 'los sintomas de', 'ver sintomas de', 'como esta'],
+                        ejecutar: (i) => abrir(pacientes[i]),
+                    },
+                ],
             },
         ],
         acciones: accionesComunesVoz('PERSONAL_SALUD', anunciar),
@@ -94,7 +104,13 @@ export default function MisPacientesScreen() {
                 />
                 <View style={styles.lista}>
                     {pacientes.map((p) => (
-                        <ElementoLista key={p.id} titulo={p.pacienteNombre} lineas={[`Asignado el ${fechaLarga(p.fechaAsignacion)}`]} />
+                        <ElementoLista
+                            key={p.id}
+                            titulo={p.pacienteNombre}
+                            lineas={[`Asignado el ${fechaLarga(p.fechaAsignacion)}`]}
+                            onPress={() => abrir(p)}
+                            descripcionPress={`Ver los síntomas de ${p.pacienteNombre}`}
+                        />
                     ))}
                 </View>
             </Tarjeta>
