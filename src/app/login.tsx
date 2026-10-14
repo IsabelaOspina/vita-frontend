@@ -14,6 +14,7 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import { ApiError } from '@/services/api';
 import { iniciarSesion } from '@/services/authService';
+import { rutaDeInicio } from '@/utils/sesion';
 
 /** Convierte cualquier error en un mensaje entendible para el usuario. */
 function mensajeDeError(e: unknown): string {
@@ -41,7 +42,6 @@ export default function LoginScreen() {
     const [contrasena, setContrasena] = useState('');
     const [errores, setErrores] = useState<Errores>({});
     const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
-    const [bienvenida, setBienvenida] = useState<string | null>(null);
     // El aviso de "cuenta creada" se toma una sola vez del parámetro y luego vive en el estado,
     // para poder quitarlo cuando la persona empieza a escribir o inicia sesión
     const [cuentaCreada, setCuentaCreada] = useState(params.registrado === '1');
@@ -63,7 +63,6 @@ export default function LoginScreen() {
         const encontrados = validar(correo, contrasena);
         setErrores(encontrados);
         setErrorGeneral(null);
-        setBienvenida(null);
         setCuentaCreada(false);
         if (Object.keys(encontrados).length > 0) {
             // Se leen los errores concretos, no solo un aviso general
@@ -76,10 +75,9 @@ export default function LoginScreen() {
             // authService guarda el token y devuelve el usuario
             const respuesta = await iniciarSesion({ correo: correo.trim(), contrasena });
             const primerNombre = respuesta.usuario.nombre.split(' ')[0];
-            // TODO: cuando exista el panel principal, navegar a él en lugar de mostrar este mensaje
-            const mensaje = `¡Bienvenido, ${primerNombre}! Iniciaste sesión correctamente.`;
-            setBienvenida(mensaje);
-            anunciar(mensaje);
+            anunciar(`¡Bienvenido, ${primerNombre}!`);
+            // Cada rol tiene su pantalla principal: paciente, personal de salud o administrador
+            router.replace(rutaDeInicio(respuesta.usuario.rol));
         } catch (e) {
             const mensaje = mensajeDeError(e);
             setErrorGeneral(mensaje);
@@ -96,7 +94,7 @@ export default function LoginScreen() {
             ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
             : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA.',
         ejemplos: [
-            'mi correo es maria arroba gmail punto com',
+            'mi correo es isabela arroba gmail punto com',
             'mi contraseña es, y la dices',
             'o todo junto: mi correo es …, y mi contraseña es …, e inicia sesión',
             'quiero registrarme',
@@ -157,7 +155,6 @@ export default function LoginScreen() {
                     },
                     !altoContraste && styles.sombra,
                 ]}>
-                {bienvenida && <Aviso tipo="exito" mensaje={bienvenida} />}
                 {cuentaCreada && (
                     <Aviso tipo="exito" mensaje="¡Tu cuenta fue creada! Ahora inicia sesión." />
                 )}

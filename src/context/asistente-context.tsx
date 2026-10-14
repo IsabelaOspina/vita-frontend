@@ -166,7 +166,11 @@ function esEco(texto: string): boolean {
     if (tiempoDesdeQueCallo() > 3000) return false;
     const oidas = aPalabras(texto);
     if (oidas.split(' ').length < 2) return false;
-    return aPalabras(ultimoMensaje()).includes(oidas);
+    // El eco es el final de lo que dijo la app (lo último que alcanzó a oír el micrófono). Si la
+    // persona repite una orden que VITA sugirió en medio de su mensaje, no es eco
+    const dicho = aPalabras(ultimoMensaje());
+    const posicion = dicho.lastIndexOf(oidas);
+    return posicion >= 0 && dicho.length - (posicion + oidas.length) <= 12;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -222,7 +226,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
      * Pregunta de sí o no que VITA acaba de hacer: ofrecer la acción principal ("¿Quieres crear
      * la cuenta?") o un paso opcional ("¿Quieres agregar un contacto de emergencia?").
      */
-    const confirmarRef = useRef<{ tipo: 'accion' | 'paso'; indice: number } | null>(null);
+    const confirmarRef = useRef<
+        { tipo: 'accion' | 'paso'; indice: number } | { tipo: 'funcion'; ejecutar: () => void } | null
+    >(null);
     /** Siguiente paso opcional que falta ofrecer en esta pantalla. */
     const pasoRef = useRef(0);
     /** Cuántas veces seguidas no entendió. */
@@ -287,9 +293,11 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
 
     /** Ofrece la acción principal de la pantalla cuando ya está todo lleno. */
     const ofrecerAccion = useCallback(() => {
-        const accion = pantallaActual()?.acciones[0];
-        if (!accion) return false;
-        hablar(`Todo listo. ¿Quieres ${nombreDeAccion(accion)}? Di sí.`);
+        const pantalla = pantallaActual();
+        const accion = pantalla?.acciones[0];
+        // Solo en formularios: en las demás pantallas no hay una acción "principal" que ofrecer
+        if (!accion || !pantalla.campos.length) return false;
+        hablar(`Todo listo. Responde sí o no: ¿quieres ${nombreDeAccion(accion)}?`);
         confirmarRef.current = { tipo: 'accion', indice: 0 };
         return true;
     }, []);
@@ -352,6 +360,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 case 'ayuda': {
                     // Ayuda útil: dónde está, y empieza a pedir lo que falta, uno por uno
                     if (pantalla?.titulo) hablar(`Estás en ${pantalla.titulo}`);
+                    if (pantalla && !pantalla.campos.length && pantalla.ejemplos.length) {
+                        hablar(`Puedes decir: ${pantalla.ejemplos.slice(0, 4).join('. ')}`);
+                    }
                     hablar('Para escuchar todas las órdenes, di: más opciones');
                     if (!continuarFlujo(new Set(), null, false)) hablar('¿Qué quieres hacer?');
                     break;
@@ -449,6 +460,39 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     }
                     break;
                 }
+                case 'leerLista': {
+                    const { lista } = resultado;
+                    if (!lista.elementos.length) {
+                        hablar(lista.vacia);
+                        break;
+                    }
+                    const cantidad = lista.elementos.length;
+                    hablar(
+                        `${lista.nombre}: ${cantidad === 1 ? 'hay uno' : `hay ${cantidad}`}. ` +
+                        lista.elementos
+                            .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`)
+                            .join('. '),
+                    );
+                    break;
+                }
+                case 'accionElemento': {
+                    const { lista, accion, indice } = resultado;
+                    const noAplica = accion.noAplica?.(indice);
+                    if (noAplica) {
+                        hablar(noAplica);
+                        break;
+                    }
+                    // Las acciones delicadas (desactivar, quitar una asignación) se confirman antes
+                    if (accion.confirmar) {
+                        hablar(`Responde sí o no. ${accion.confirmar(lista.elementos[indice])}`);
+                        confirmarRef.current = { tipo: 'funcion', ejecutar: () => accion.ejecutar(indice) };
+                    }
+                    // Las demás se ejecutan en ejecutarVarias, después de los campos
+                    break;
+                }
+                case 'elementoNoEncontrado':
+                    hablar(`No encontré a ${resultado.buscado} en ${resultado.lista.nombre.toLowerCase()}. Puedes decir: ${resultado.lista.claves[0]}, para escucharla.`);
+                    break;
                 case 'accion':
                 case 'noEntendido':
                     // Se atienden en ejecutarVarias
@@ -466,7 +510,13 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
     const ejecutarVarias = useCallback(
         (resultados: Resultado[]) => {
             const entendidos = resultados.filter((r) => r.tipo !== 'noEntendido');
-            const acciones = resultados.filter((r): r is Extract<Resultado, { tipo: 'accion' }> => r.tipo === 'accion');
+            const accionesPantalla = resultados.filter((r): r is Extract<Resultado, { tipo: 'accion' }> => r.tipo === 'accion');
+            // Acciones sobre elementos que se hacen de una vez (sin confirmar), por ejemplo "ver a Ana"
+            const accionesElemento = resultados.filter(
+                (r): r is Extract<Resultado, { tipo: 'accionElemento' }> =>
+                    r.tipo === 'accionElemento' && !r.accion.confirmar && !r.accion.noAplica?.(r.indice),
+            );
+            const acciones = [...accionesPantalla, ...accionesElemento];
             campoPendienteRef.current = null;
             confirmarRef.current = null;
 
@@ -482,7 +532,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             if (entendidos.length === 0) {
                 fallosRef.current += 1;
                 if (fallosRef.current === 1) {
-                    hablar('No te entendí. ¿Me lo repites? También puedes decir: ayuda.');
+                    hablar('No te entendí. Si lo necesitas, pide ayuda. ¿Me lo repites?');
                     seguimientoRef.current = true;
                 } else {
                     hablar('No te entendí. Cuando quieras, di: Oye VITA, ayuda.');
@@ -527,9 +577,10 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             setTimeout(() => {
                 // Se busca la acción en la versión más reciente de la pantalla (con los valores ya escritos)
                 const pantalla = pantallaActual();
-                for (const { accion, indice } of acciones) {
+                for (const { accion, indice } of accionesPantalla) {
                     (pantalla?.acciones[indice] ?? accion).ejecutar();
                 }
+                for (const { accion, indice } of accionesElemento) accion.ejecutar(indice);
                 terminar();
             }, 120);
         },
@@ -549,7 +600,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
 
             // Se prueba cada interpretación del reconocedor y se queda la que mejor se entiende
             for (const texto of alternativas) {
-                const resto = separarActivacion(texto);
+                const resto = separarActivacion(texto, !atento);
                 // Sin "Oye VITA" y fuera del tiempo de respuesta: es conversación normal, se ignora
                 const orden = resto ?? (atento ? limpiarBordes(texto) : null);
                 if (orden === null) continue;
@@ -563,6 +614,13 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 const pregunta = confirmarRef.current;
                 if (pregunta && pantalla) {
                     if (SI.test(palabras)) {
+                        if (pregunta.tipo === 'funcion') {
+                            // Confirmó una acción delicada: la pantalla dice el resultado
+                            confirmarRef.current = null;
+                            pregunta.ejecutar();
+                            seguimientoRef.current = true;
+                            return;
+                        }
                         if (pregunta.tipo === 'paso') {
                             aceptarPaso(pregunta.indice);
                             return;
@@ -612,7 +670,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
 
     /** ¿Lo dicho ya es una orden completa? Así se responde rápido sin cortar a quien sigue hablando. */
     const pareceCompleto = useCallback((texto: string, atento: boolean) => {
-        const resto = separarActivacion(texto);
+        const resto = separarActivacion(texto, !atento);
         const orden = resto ?? (atento ? limpiarBordes(texto) : null);
         // Conversación sin "Oye VITA" (se ignora) o solo "Oye VITA" (responde "Dime")
         if (orden === null || !orden) return true;
@@ -824,9 +882,11 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             pasoRef.current = 0;
             if (!leer) return;
             if (activoRef.current) {
-                // Con el asistente activo solo se dice el nombre de la pantalla (la descripción completa
+                // En los formularios solo se dice el nombre de la pantalla (la descripción completa
                 // se escucha con "lee la pantalla") y se empieza a pedir lo que falta
-                hablar(ref.current.titulo ?? ref.current.descripcion, true);
+                const esFormulario = ref.current.campos.length > 0;
+                // Las pantallas sin formulario terminan con una pregunta, para que se sepa que VITA escucha
+                hablar(esFormulario ? (ref.current.titulo ?? ref.current.descripcion) : `${ref.current.descripcion} ¿Qué quieres hacer?`, true);
                 continuarFlujo(new Set(), null, true);
                 seguimientoRef.current = true;
             } else {

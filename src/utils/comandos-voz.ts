@@ -57,6 +57,38 @@ export type PantallaVoz = {
      * acción principal. Por ejemplo: "¿Quieres agregar un contacto de emergencia?".
      */
     pasosOpcionales?: PasoOpcional[];
+    /** Listas que se pueden leer y sobre cuyos elementos se puede actuar ("desactiva a Ana Gómez"). */
+    listas?: ListaVoz[];
+};
+
+/** Un elemento de una lista (una cuenta, un paciente, un profesional…). */
+export type ElementoVoz = {
+    /** Por lo que se le reconoce al hablar, normalmente el nombre de la persona. */
+    nombre: string;
+    /** Lo que se lee después del nombre ("Cardiología", "cuenta desactivada"…). */
+    detalle?: string;
+};
+
+/** Algo que se puede hacer con un elemento: "ver a Ana", "desactiva a Ana", "asigna a Ana". */
+export type AccionElementoVoz = {
+    /** Verbos con que se pide, sin tildes: ["desactiva", "desactivar", "bloquea"]. */
+    frases: string[];
+    /** Si existe, antes de hacerlo se pregunta esto ("¿Seguro que quieres desactivar a Ana?"). */
+    confirmar?: (elemento: ElementoVoz) => string;
+    /** Si existe y devuelve un texto, la acción no aplica a ese elemento y se dice ese texto. */
+    noAplica?: (indice: number) => string | null;
+    ejecutar: (indice: number) => void;
+};
+
+export type ListaVoz = {
+    /** Cómo se pide leerla: ["mis pacientes", "pacientes"]. */
+    claves: string[];
+    /** Cómo se nombra al leerla: "Tus pacientes". */
+    nombre: string;
+    /** Lo que se dice si está vacía. */
+    vacia: string;
+    elementos: ElementoVoz[];
+    acciones?: AccionElementoVoz[];
 };
 
 export type PasoOpcional = {
@@ -89,6 +121,9 @@ export type Resultado =
     | { tipo: 'pedirCampo'; campo: CampoVoz }
     | { tipo: 'opcion'; opcion: OpcionVoz; marcar: boolean }
     | { tipo: 'accion'; accion: AccionVoz; indice: number }
+    | { tipo: 'leerLista'; lista: ListaVoz }
+    | { tipo: 'accionElemento'; lista: ListaVoz; accion: AccionElementoVoz; indice: number }
+    | { tipo: 'elementoNoEncontrado'; lista: ListaVoz; buscado: string }
     | { tipo: 'noEntendido'; texto: string };
 
 // ---------------------------------------------------------------------------------------------
@@ -176,11 +211,16 @@ const ACTIVACION_SOLO_NOMBRE = new RegExp(`^[\\s¡¿]*${NOMBRE}(?=$|[\\s,.!?])`)
 /**
  * Busca "Oye VITA" en lo que se dijo.
  * Devuelve null si no está, o el resto de la frase (la orden) si está, que puede venir vacía.
+ *
+ * Con `soloNombre` en false no se acepta "VITA" sin el "oye": así, cuando VITA ya está
+ * escuchando una respuesta, una contraseña como "vita 2026" no se confunde con la activación.
  */
-export function separarActivacion(texto: string): string | null {
+export function separarActivacion(texto: string, soloNombre = true): string | null {
     const normal = normalizar(texto);
     const encontrado =
-        ACTIVACION_CON_SALUDO.exec(normal) ?? ACTIVACION_PEGADA.exec(normal) ?? ACTIVACION_SOLO_NOMBRE.exec(normal);
+        ACTIVACION_CON_SALUDO.exec(normal) ??
+        ACTIVACION_PEGADA.exec(normal) ??
+        (soloNombre ? ACTIVACION_SOLO_NOMBRE.exec(normal) : null);
     if (!encontrado) return null;
     return limpiarBordes(texto.slice(encontrado.index + encontrado[0].length));
 }
@@ -328,6 +368,56 @@ function interpretarParecido(original: string, pantalla: PantallaVoz): Resultado
     return null;
 }
 
+const ORDINALES: Record<string, number> = {
+    primero: 1, primera: 1, primer: 1, segundo: 2, segunda: 2, tercero: 3, tercera: 3, tercer: 3,
+    cuarto: 4, cuarta: 4, quinto: 5, quinta: 5, sexto: 6, sexta: 6, septimo: 7, septima: 7,
+    octavo: 8, octava: 8, noveno: 9, novena: 9, decimo: 10, decima: 10,
+};
+
+/** Busca en la lista el elemento que se nombró: por número ("el 2", "el segundo", "el último") o por nombre. */
+function buscarElemento(dicho: string, elementos: ElementoVoz[]): number | null {
+    const palabras = dicho.split(' ').filter(Boolean);
+    for (const palabra of palabras) {
+        if (palabra === 'ultimo' || palabra === 'ultima') return elementos.length ? elementos.length - 1 : null;
+        const numero = ORDINALES[palabra] ?? Number(DIGITOS[palabra] ?? palabra);
+        if (Number.isInteger(numero) && numero >= 1 && numero <= elementos.length) return numero - 1;
+    }
+    // Por nombre: gana el elemento con más palabras de su nombre dichas (tolerando una letra mal reconocida)
+    let mejor: number | null = null;
+    let mejorPuntaje = 0;
+    elementos.forEach((elemento, i) => {
+        const delNombre = aPalabras(elemento.nombre).split(' ').filter((p) => p.length >= 3);
+        const puntaje = delNombre.filter((p) => palabras.some((d) => d === p || seParecen(d, p))).length;
+        if (puntaje > mejorPuntaje) {
+            mejor = i;
+            mejorPuntaje = puntaje;
+        }
+    });
+    return mejor;
+}
+
+/** Palabras de cortesía que pueden ir antes de la orden: "quiero ver a…", "por favor desactiva a…". */
+const ANTES_DE_ACCION = /^(?:(?:quiero|puedes|podrias|por favor|favor|vamos a|voy a|necesito)\s+)*/;
+/** Palabras que pueden ir entre la orden y el nombre: "desactiva a la cuenta de Ana". */
+const ANTES_DE_NOMBRE = /^(?:(?:a|al|la|el|los|las|de|del|cuenta|cuentas|paciente|profesional|doctor|doctora|usuario|usuaria|numero)\s+)*/;
+
+/** "desactiva a Ana Gómez", "ver el número 2": acción sobre un elemento de una lista. */
+function interpretarElemento(palabras: string, pantalla: PantallaVoz): Resultado | null {
+    const sinCortesia = palabras.replace(ANTES_DE_ACCION, '');
+    for (const lista of pantalla.listas ?? []) {
+        for (const accion of lista.acciones ?? []) {
+            const frase = accion.frases.find((f) => sinCortesia === f || sinCortesia.startsWith(`${f} `));
+            if (!frase) continue;
+            const buscado = sinCortesia.slice(frase.length).trim().replace(ANTES_DE_NOMBRE, '');
+            if (!buscado) continue;
+            const indice = buscarElemento(buscado, lista.elementos);
+            if (indice !== null) return { tipo: 'accionElemento', lista, accion, indice };
+            return { tipo: 'elementoNoEncontrado', lista, buscado };
+        }
+    }
+    return null;
+}
+
 export function interpretar(orden: string, pantalla: PantallaVoz | null): Resultado {
     const original = limpiarBordes(orden.trim());
     const texto = normalizar(original);
@@ -420,7 +510,22 @@ export function interpretar(orden: string, pantalla: PantallaVoz | null): Result
 
     if (!pantalla) return { tipo: 'noEntendido', texto: original };
 
-    // 3. Marcar o desmarcar opciones: "tengo discapacidad visual", "quita auditiva"
+    // 3. Acciones sobre un elemento de una lista: "desactiva a Ana Gómez", "ver el número 2"
+    const sobreElemento = interpretarElemento(palabras, pantalla);
+    if (sobreElemento?.tipo === 'accionElemento') return sobreElemento;
+
+    // 3b. Acciones de la pantalla ("cerrar sesión", "registrar profesional"…)
+    const accionPantalla = pantalla.acciones.findIndex((a) => contieneAlguna(palabras, a.frases));
+    if (accionPantalla >= 0) return { tipo: 'accion', accion: pantalla.acciones[accionPantalla], indice: accionPantalla };
+
+    // 3c. Nombró una acción de lista pero no se encontró a quién: "desactiva a Pedro" (y Pedro no está)
+    if (sobreElemento) return sobreElemento;
+
+    // 3d. Leer una lista: "mis pacientes", "lee la lista"
+    const lista = (pantalla.listas ?? []).find((l) => contieneAlguna(palabras, l.claves));
+    if (lista) return { tipo: 'leerLista', lista };
+
+    // 3e. Marcar o desmarcar opciones: "tengo discapacidad visual", "quita auditiva"
     for (const opcion of pantalla.opciones ?? []) {
         if (!contieneAlguna(palabras, opcion.claves)) continue;
         return { tipo: 'opcion', opcion, marcar: !QUITAR.test(palabras) };

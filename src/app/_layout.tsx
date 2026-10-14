@@ -18,8 +18,8 @@ export default function RootLayout() {
 function Navegacion() {
     const { colores, altoContraste } = useAccesibilidad();
 
-    // TODO(sesión): cuando existan pantallas privadas (por ejemplo el panel principal),
-    // protegerlas con <Stack.Protected guard={...}> para que solo se entre con token.
+    // TODO(sesión): cuando exista el contexto de sesión, proteger las pantallas de cada rol con
+    // <Stack.Protected guard={...}> para que solo se entre con token y con el rol correcto.
     return (
         <>
             <StatusBar style={altoContraste ? 'light' : 'dark'} />
@@ -32,6 +32,12 @@ function Navegacion() {
                 <Stack.Screen name="index" />
                 <Stack.Screen name="login" />
                 <Stack.Screen name="registro" />
+                <Stack.Screen name="inicio" />
+                <Stack.Screen name="personal" />
+                <Stack.Screen name="admin/index" />
+                <Stack.Screen name="admin/nuevo-personal" />
+                <Stack.Screen name="admin/cuenta/[id]" />
+                <Stack.Screen name="cambiar-contrasena" />
             </Stack>
         </>
     );

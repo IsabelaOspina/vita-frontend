@@ -35,6 +35,16 @@ const ICONOS = {
     telefono: { ios: 'phone.fill', android: 'call', web: 'call' },
     parentesco: { ios: 'person.2.fill', android: 'group', web: 'group' },
     contactoEmergencia: { ios: 'cross.case.fill', android: 'contact_emergency', web: 'contact_emergency' },
+    medico: { ios: 'stethoscope', android: 'stethoscope', web: 'stethoscope' },
+    pacientes: { ios: 'person.3.fill', android: 'groups', web: 'groups' },
+    admin: { ios: 'shield.lefthalf.filled', android: 'admin_panel_settings', web: 'admin_panel_settings' },
+    agregar: { ios: 'plus', android: 'add', web: 'add' },
+    quitar: { ios: 'minus.circle', android: 'remove_circle', web: 'remove_circle' },
+    desactivar: { ios: 'person.fill.xmark', android: 'person_off', web: 'person_off' },
+    reactivar: { ios: 'person.fill.checkmark', android: 'how_to_reg', web: 'how_to_reg' },
+    llave: { ios: 'key.fill', android: 'key', web: 'key' },
+    insignia: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' },
+    recargar: { ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' },
 } satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

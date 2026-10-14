@@ -1,0 +1,16 @@
+{
+  "routes": [
+    { "route": "/login", "rewrite": "/login.html" },
+    { "route": "/registro", "rewrite": "/registro.html" },
+    { "route": "/inicio", "rewrite": "/inicio.html" },
+    { "route": "/personal", "rewrite": "/personal.html" },
+    { "route": "/cambiar-contrasena", "rewrite": "/cambiar-contrasena.html" },
+    { "route": "/admin", "rewrite": "/admin/index.html" },
+    { "route": "/admin/nuevo-personal", "rewrite": "/admin/nuevo-personal.html" },
+    { "route": "/admin/cuenta/*", "rewrite": "/admin/cuenta/[id].html" }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/_expo/*", "/assets/*", "/*.{png,jpg,jpeg,gif,svg,ico,css,js,json,ttf,woff,woff2}"]
+  }
+}

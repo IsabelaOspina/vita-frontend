@@ -160,7 +160,7 @@ export default function RegistroScreen() {
             'Crear cuenta. Llena tu nombre completo, cédula, correo y una contraseña. ' +
             'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad.',
         ejemplos: [
-            'mi nombre es María Gómez y mi cédula es 1 0 9 4 6 9 9 7',
+            'mi nombre es María Gómez y mi cédula es 1 0 9 4',
             'mi correo es maría arroba gmail punto com y mi contraseña es girasol 2026',
             'el nombre del contacto es Ana',
             'teléfono del contacto 300 123 4567',
@@ -256,11 +256,11 @@ export default function RegistroScreen() {
         // Al terminar los datos obligatorios, el asistente ofrece los opcionales antes de crear la cuenta
         pasosOpcionales: [
             {
-                pregunta: 'Ya tengo tus datos principales. ¿Quieres agregar un contacto de emergencia? Di sí o no.',
+                pregunta: 'Ya tengo tus datos principales. Responde sí o no: ¿quieres agregar un contacto de emergencia?',
                 campos: ['Nombre del contacto', 'Teléfono del contacto', 'Parentesco'],
             },
             {
-                pregunta: '¿Quieres contarnos si tienes alguna discapacidad? Di sí o no.',
+                pregunta: 'Responde sí o no: ¿quieres contarnos si tienes alguna discapacidad?',
                 siAcepta: '¿Cuál? Puedes decir visual, auditiva, cognitiva o del habla. Puedes decir varias.',
                 opciones: true,
             },
