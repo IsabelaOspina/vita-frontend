@@ -13,6 +13,7 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import { cambiarMiContrasena } from '@/services/usuarioService';
 import { mensajeDeError, tokenActual } from '@/utils/sesion';
+import { campoDelError } from '@/utils/textos';
 
 type Errores = Partial<Record<'actual' | 'nueva' | 'confirmacion', string>>;
 
@@ -56,7 +57,13 @@ export default function CambiarContrasenaScreen() {
             anunciar(mensaje);
         } catch (e) {
             const mensaje = mensajeDeError(e, 'No pudimos cambiar la contraseña.');
-            setAviso({ tipo: 'error', mensaje });
+            // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
+            const campo = campoDelError<keyof Errores>(mensaje, [
+                [/actual/i, 'actual'],
+                [/nueva|diferente/i, 'nueva'],
+            ]);
+            if (campo) setErrores({ [campo]: mensaje });
+            else setAviso({ tipo: 'error', mensaje });
             anunciar(mensaje);
         } finally {
             setCargando(false);
@@ -103,11 +110,6 @@ export default function CambiarContrasenaScreen() {
         <FondoPantalla>
             <Encabezado volver titulo="Cambiar contraseña" subtitulo="Por tu seguridad, primero escribe la contraseña que usas hoy." />
 
-            {aviso && (
-                <View style={styles.aviso}>
-                    <Aviso tipo={aviso.tipo} mensaje={aviso.mensaje} />
-                </View>
-            )}
 
             <Tarjeta>
                 <Campo
@@ -149,6 +151,7 @@ export default function CambiarContrasenaScreen() {
                     onSubmitEditing={guardar}
                 />
                 <Boton titulo="Guardar contraseña" icono="check" onPress={guardar} cargando={cargando} />
+                {aviso && <Aviso tipo={aviso.tipo} mensaje={aviso.mensaje} />}
             </Tarjeta>
         </FondoPantalla>
     );

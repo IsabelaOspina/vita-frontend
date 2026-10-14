@@ -45,6 +45,7 @@ const ICONOS = {
     llave: { ios: 'key.fill', android: 'key', web: 'key' },
     insignia: { ios: 'checkmark.seal.fill', android: 'verified', web: 'verified' },
     recargar: { ios: 'arrow.clockwise', android: 'refresh', web: 'refresh' },
+    casa: { ios: 'house.fill', android: 'home', web: 'home' },
 } satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

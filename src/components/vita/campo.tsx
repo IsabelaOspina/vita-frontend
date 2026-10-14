@@ -1,11 +1,24 @@
 import { forwardRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, Pressable, StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { AltoTactil, Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 
 import { Icono, type NombreIcono } from './icono';
 import { Texto } from './texto';
+
+/**
+ * Microsoft Edge (y algunos navegadores) agregan su propio botón de "ver contraseña" dentro del
+ * campo, y quedaban dos ojos. Se oculta el del navegador: el campo ya tiene el suyo.
+ */
+if (Platform.OS === 'web' && typeof document !== 'undefined' && !document.getElementById('vita-sin-ojo-navegador')) {
+    const estilo = document.createElement('style');
+    estilo.id = 'vita-sin-ojo-navegador';
+    estilo.textContent =
+        'input::-ms-reveal, input::-ms-clear { display: none !important; }' +
+        'input::-webkit-credentials-auto-fill-button, input::-webkit-contacts-auto-fill-button { visibility: hidden; display: none !important; }';
+    document.head.appendChild(estilo);
+}
 
 type Props = Omit<TextInputProps, 'style'> & {
     etiqueta: string;
@@ -76,7 +89,8 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
                         accessibilityRole="button"
                         accessibilityLabel={oculto ? 'Mostrar contraseña' : 'Ocultar contraseña'}
                         style={styles.botonOjo}>
-                        <Icono nombre={oculto ? 'ojo' : 'ojoTachado'} tamano={22} color={colores.textoSecundario} />
+                        {/* El ojo muestra cómo está la contraseña: tachado si está oculta, abierto si se ve */}
+                        <Icono nombre={oculto ? 'ojoTachado' : 'ojo'} tamano={22} color={colores.textoSecundario} />
                     </Pressable>
                 )}
             </View>
@@ -111,10 +125,8 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
-        // Sin esto, en web el input no se encoge y empuja el botón del ojo fuera del campo
         minWidth: 0,
         paddingVertical: Espacio.m,
-        // En web quita el recuadro azul por defecto: el borde del campo ya indica el foco
         outlineStyle: 'none',
     } as object,
     botonOjo: {

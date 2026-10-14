@@ -8,16 +8,20 @@ import { eliminarToken, obtenerToken } from '@/utils/tokenStorage';
 /** Una cuenta tal como la devuelve el backend (las de personal de salud traen `personalSalud`). */
 export type Cuenta = UsuarioResponse;
 
+/** Las pestañas de cada rol: su pantalla principal, "Mi cuenta" y "Accesibilidad". */
+const RUTAS = {
+    USUARIO: { inicio: '/paciente', miCuenta: '/paciente/mi-cuenta', accesibilidad: '/paciente/accesibilidad' },
+    PERSONAL_SALUD: { inicio: '/personal', miCuenta: '/personal/mi-cuenta', accesibilidad: '/personal/accesibilidad' },
+    ADMIN: { inicio: '/admin', miCuenta: '/admin/mi-cuenta', accesibilidad: '/admin/accesibilidad' },
+} as const;
+
+export function rutasDe(rol: Rol) {
+    return RUTAS[rol] ?? RUTAS.USUARIO;
+}
+
 /** Pantalla principal de cada rol, a la que se llega después de iniciar sesión. */
 export function rutaDeInicio(rol: Rol) {
-    switch (rol) {
-        case 'ADMIN':
-            return '/admin' as const;
-        case 'PERSONAL_SALUD':
-            return '/personal' as const;
-        default:
-            return '/inicio' as const;
-    }
+    return rutasDe(rol).inicio;
 }
 
 /** Borra el token guardado y vuelve al inicio de sesión. */

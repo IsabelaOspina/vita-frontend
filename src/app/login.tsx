@@ -15,6 +15,7 @@ import { useComandosPantalla } from '@/context/asistente-context';
 import { ApiError } from '@/services/api';
 import { iniciarSesion } from '@/services/authService';
 import { rutaDeInicio } from '@/utils/sesion';
+import { campoDelError } from '@/utils/textos';
 
 /** Convierte cualquier error en un mensaje entendible para el usuario. */
 function mensajeDeError(e: unknown): string {
@@ -80,7 +81,13 @@ export default function LoginScreen() {
             router.replace(rutaDeInicio(respuesta.usuario.rol));
         } catch (e) {
             const mensaje = mensajeDeError(e);
-            setErrorGeneral(mensaje);
+            const campo = campoDelError<keyof Errores>(mensaje, [
+                [/inactivo/i, 'correo'],
+                [/contrase/i, 'contrasena'],
+                [/correo/i, 'correo'],
+            ]);
+            if (campo) setErrores({ [campo]: mensaje });
+            else setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {
             setCargando(false);
@@ -158,8 +165,6 @@ export default function LoginScreen() {
                 {cuentaCreada && (
                     <Aviso tipo="exito" mensaje="¡Tu cuenta fue creada! Ahora inicia sesión." />
                 )}
-                {errorGeneral && <Aviso mensaje={errorGeneral} />}
-
                 <Campo
                     etiqueta="Correo electrónico"
                     icono="correo"
@@ -197,6 +202,7 @@ export default function LoginScreen() {
                 />
 
                 <Boton titulo="Iniciar sesión" icono="siguiente" onPress={enviar} cargando={cargando} />
+                {errorGeneral && <Aviso mensaje={errorGeneral} />}
             </View>
 
             <View style={styles.registro}>

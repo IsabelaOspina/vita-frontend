@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, View, type TextInput } from 'react-native';
 
+import { accionesComunesVoz, salir } from '@/components/vita/acciones-cuenta';
 import { Aviso } from '@/components/vita/aviso';
 import { Boton } from '@/components/vita/boton';
 import { Campo } from '@/components/vita/campo';
@@ -13,6 +14,7 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import { crearPersonal } from '@/services/adminUsuarioService';
 import { mensajeDeError, tokenActual } from '@/utils/sesion';
+import { campoDelError } from '@/utils/textos';
 
 type Errores = Partial<Record<'nombre' | 'cedula' | 'correo' | 'telefono' | 'especialidad' | 'registro' | 'contrasena', string>>;
 
@@ -63,7 +65,8 @@ export default function NuevoPersonalScreen() {
     const registroRef = useRef<TextInput>(null);
     const contrasenaRef = useRef<TextInput>(null);
 
-    const volver = () => (router.canGoBack() ? router.back() : router.replace('/admin'));
+    // Es una pestaña: "Cancelar" lleva a la pestaña de cuentas
+    const volver = () => router.navigate('/admin');
 
     const registrar = async () => {
         const encontrados = validar({ nombre, cedula, correo, telefono, especialidad, registro, contrasena });
@@ -91,10 +94,29 @@ export default function NuevoPersonalScreen() {
             );
             anunciar(`Listo. ${creado.nombre} quedó registrado como profesional de salud.`);
             // Vuelve al panel, que muestra el aviso de éxito
-            router.dismissTo({ pathname: '/admin', params: { creado: creado.nombre } });
+            // Se limpia el formulario (la pestaña sigue abierta) y se vuelve a las cuentas con el aviso de éxito
+            setNombre('');
+            setCedula('');
+            setCorreo('');
+            setTelefono('');
+            setEspecialidad('');
+            setRegistro('');
+            setContrasena('');
+            router.navigate({ pathname: '/admin', params: { creado: creado.nombre } });
         } catch (e) {
             const mensaje = mensajeDeError(e, 'No pudimos registrar al profesional.');
-            setErrorGeneral(mensaje);
+            // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
+            const campo = campoDelError<keyof Errores>(mensaje, [
+                [/correo/i, 'correo'],
+                [/c[eé]dula/i, 'cedula'],
+                [/registro/i, 'registro'],
+                [/especialidad/i, 'especialidad'],
+                [/contrase/i, 'contrasena'],
+                [/tel[eé]fono/i, 'telefono'],
+                [/nombre/i, 'nombre'],
+            ]);
+            if (campo) setErrores({ [campo]: mensaje });
+            else setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {
             setCargando(false);
@@ -175,19 +197,20 @@ export default function NuevoPersonalScreen() {
         pasosOpcionales: [{ pregunta: 'Responde sí o no: ¿quieres agregar su teléfono?', campos: ['Teléfono'] }],
         acciones: [
             { frases: ['registrar', 'guardar', 'crear', 'terminar', 'enviar'], etiqueta: 'registrar al profesional', ejecutar: registrar },
-            { frases: ['volver', 'atras', 'regresar', 'no registrar'], ejecutar: volver },
+            { frases: ['volver', 'atras', 'regresar', 'no registrar', 've a cuentas', 'ir a cuentas'], ejecutar: volver },
+            ...accionesComunesVoz('ADMIN', anunciar),
         ],
     });
 
     return (
         <FondoPantalla>
-            <Encabezado volver titulo="Registrar profesional" subtitulo="La cuenta se crea con el rol de personal de salud." />
+            <Encabezado
+                alCerrarSesion={() => salir(anunciar)}
+                icono="personaAgregar"
+                titulo="Registrar profesional"
+                subtitulo="La cuenta se crea con el rol de personal de salud."
+            />
 
-            {errorGeneral && (
-                <View style={styles.aviso}>
-                    <Aviso mensaje={errorGeneral} />
-                </View>
-            )}
 
             <Tarjeta titulo="Datos personales" icono="persona">
                 <Campo
@@ -285,6 +308,7 @@ export default function NuevoPersonalScreen() {
 
             <View style={styles.botones}>
                 <Boton titulo="Registrar profesional" icono="check" onPress={registrar} cargando={cargando} />
+                {errorGeneral && <Aviso mensaje={errorGeneral} />}
                 <Boton titulo="Cancelar" variante="secundario" onPress={volver} />
             </View>
         </FondoPantalla>

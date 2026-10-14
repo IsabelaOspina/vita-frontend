@@ -14,30 +14,57 @@ type Props = {
     icono?: NombreIcono;
     /** Muestra el botón "Volver" (en las pantallas internas). */
     volver?: boolean;
+    /** Qué hace "Volver" si no hay a dónde regresar (por ejemplo, al abrir el detalle directo desde un enlace). */
+    alVolver?: () => void;
+    /** Muestra el botón "Cerrar sesión" arriba a la derecha (en las pantallas principales). */
+    alCerrarSesion?: () => void;
 };
 
 /** Encabezado de las pantallas con sesión: botón para volver (opcional), ícono, título y subtítulo. */
-export function Encabezado({ titulo, subtitulo, icono, volver }: Props) {
+export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerrarSesion }: Props) {
     const { colores } = useAccesibilidad();
 
     return (
         <View style={styles.contenedor}>
-            {volver && (
-                <Pressable
-                    onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-                    accessibilityRole="button"
-                    accessibilityLabel="Volver"
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                        styles.volver,
-                        { backgroundColor: colores.superficie, borderColor: colores.borde },
-                        pressed && { opacity: 0.7 },
-                    ]}>
-                    <Icono nombre="atras" tamano={22} color={colores.primario} />
-                    <Texto variante="etiqueta" color="primario">
-                        Volver
-                    </Texto>
-                </Pressable>
+            {(volver || alCerrarSesion) && (
+                <View style={styles.barra}>
+                    {volver ? (
+                        <Pressable
+                            onPress={() => (router.canGoBack() ? router.back() : alVolver ? alVolver() : router.replace('/'))}
+                            accessibilityRole="button"
+                            accessibilityLabel="Volver"
+                            hitSlop={8}
+                            style={({ pressed }) => [
+                                styles.volver,
+                                { backgroundColor: colores.superficie, borderColor: colores.borde },
+                                pressed && { opacity: 0.7 },
+                            ]}>
+                            <Icono nombre="atras" tamano={22} color={colores.primario} />
+                            <Texto variante="etiqueta" color="primario">
+                                Volver
+                            </Texto>
+                        </Pressable>
+                    ) : (
+                        <View />
+                    )}
+                    {alCerrarSesion && (
+                        <Pressable
+                            onPress={alCerrarSesion}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cerrar sesión"
+                            hitSlop={8}
+                            style={({ pressed }) => [
+                                styles.boton,
+                                { backgroundColor: colores.superficie, borderColor: colores.primario },
+                                pressed && { opacity: 0.7 },
+                            ]}>
+                            <Texto variante="etiqueta" color="primario" peso="700">
+                                Cerrar sesión
+                            </Texto>
+                            <Icono nombre="salir" tamano={20} color={colores.primario} />
+                        </Pressable>
+                    )}
+                </View>
             )}
 
             <View style={styles.fila}>
@@ -65,6 +92,21 @@ const styles = StyleSheet.create({
     contenedor: {
         gap: Espacio.l,
         marginBottom: Espacio.xl,
+    },
+    barra: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: Espacio.m,
+    },
+    boton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Espacio.xs,
+        minHeight: 48,
+        paddingHorizontal: Espacio.l,
+        borderRadius: Radio.total,
+        borderWidth: 1.5,
     },
     volver: {
         alignSelf: 'flex-start',

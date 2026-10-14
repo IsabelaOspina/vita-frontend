@@ -1,15 +1,37 @@
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
 
-import { Espacio } from '@/constants/vita-theme';
+import type { Rol } from '@/dto/Rol';
 import type { AccionVoz } from '@/utils/comandos-voz';
-import { cerrarSesion } from '@/utils/sesion';
+import { cerrarSesion, rutasDe } from '@/utils/sesion';
 
-import { Boton } from './boton';
+/** Cierra la sesión avisando en voz alta (botón "Cerrar sesión" de arriba a la derecha y orden de voz). */
+export function salir(anunciar: (mensaje: string) => void) {
+    anunciar('Cerraste sesión');
+    void cerrarSesion();
+}
 
-/** Órdenes de voz para cambiar la contraseña y cerrar sesión (sirven en todas las pantallas con sesión). */
-export function accionesDeCuentaVoz(anunciar: (mensaje: string) => void): AccionVoz[] {
+/**
+ * Órdenes de voz que sirven en todas las pantallas con sesión: moverse entre las pestañas,
+ * cambiar la contraseña y cerrar sesión. Cada pantalla las agrega al final de sus acciones.
+ */
+export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void): AccionVoz[] {
+    const rutas = rutasDe(rol);
     return [
+        {
+            frases: ['ve a mi cuenta', 'ir a mi cuenta', 'abre mi cuenta', 'mi cuenta', 'mis datos', 'mi perfil', 'mi informacion'],
+            etiqueta: 'ir a mi cuenta',
+            ejecutar: () => router.navigate(rutas.miCuenta),
+        },
+        {
+            frases: ['ve a accesibilidad', 'ir a accesibilidad', 'abre accesibilidad', 'accesibilidad', 'ajustes', 'configuracion'],
+            etiqueta: 'ir a accesibilidad',
+            ejecutar: () => router.navigate(rutas.accesibilidad),
+        },
+        {
+            frases: ['ve al inicio', 'ir al inicio', 'volver al inicio', 'pantalla principal', 'inicio'],
+            etiqueta: 'ir al inicio',
+            ejecutar: () => router.navigate(rutas.inicio),
+        },
         {
             frases: ['cambiar contrasena', 'cambiar mi contrasena', 'cambiar la contrasena', 'cambia mi contrasena', 'cambia la contrasena'],
             etiqueta: 'cambiar la contraseña',
@@ -18,35 +40,7 @@ export function accionesDeCuentaVoz(anunciar: (mensaje: string) => void): Accion
         {
             frases: ['cerrar sesion', 'cierra sesion', 'cierra la sesion', 'cerrar la sesion', 'salir'],
             etiqueta: 'cerrar sesión',
-            ejecutar: () => {
-                anunciar('Cerraste sesión');
-                void cerrarSesion();
-            },
+            ejecutar: () => salir(anunciar),
         },
     ];
 }
-
-/** Botones "Cambiar contraseña" y "Cerrar sesión", al final de las pantallas principales. */
-export function AccionesCuenta({ anunciar }: { anunciar: (mensaje: string) => void }) {
-    return (
-        <View style={styles.contenedor}>
-            <Boton titulo="Cambiar contraseña" icono="llave" variante="secundario" onPress={() => router.push('/cambiar-contrasena')} />
-            <Boton
-                titulo="Cerrar sesión"
-                icono="salir"
-                variante="secundario"
-                onPress={() => {
-                    anunciar('Cerraste sesión');
-                    void cerrarSesion();
-                }}
-            />
-        </View>
-    );
-}
-
-const styles = StyleSheet.create({
-    contenedor: {
-        gap: Espacio.m,
-        marginBottom: Espacio.xl,
-    },
-});

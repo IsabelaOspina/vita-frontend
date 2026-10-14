@@ -17,6 +17,7 @@ import type { ContactoEmergenciaRequest } from '@/dto/ContactoEmergenciaRequest'
 import type { UsuarioRequest } from '@/dto/UsuarioRequest';
 import { ApiError } from '@/services/api';
 import { registrarUsuario } from '@/services/usuarioService';
+import { campoDelError } from '@/utils/textos';
 
 const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIcono }[] = [
     { tipo: 'VISUAL', titulo: 'Visual', icono: 'visual' },
@@ -137,7 +138,17 @@ export default function RegistroScreen() {
             router.replace({ pathname: '/login', params: { correo: correo.trim(), registrado: '1' } });
         } catch (e) {
             const mensaje = mensajeDeError(e);
-            setErrorGeneral(mensaje);
+            // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
+            const campo = campoDelError<keyof Errores>(mensaje, [
+                [/correo/i, 'correo'],
+                [/c[eé]dula/i, 'cedula'],
+                [/contrase/i, 'contrasena'],
+                [/nombre del contacto/i, 'contactoNombre'],
+                [/tel[eé]fono del contacto/i, 'contactoTelefono'],
+                [/nombre/i, 'nombre'],
+            ]);
+            if (campo) setErrores({ [campo]: mensaje });
+            else setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {
             setCargando(false);
@@ -302,8 +313,6 @@ export default function RegistroScreen() {
             </View>
 
             <View style={styles.secciones}>
-                {errorGeneral && <Aviso mensaje={errorGeneral} />}
-
                 <View style={estiloTarjeta}>
                     <Texto variante="subtitulo" accessibilityRole="header">
                         Tus datos
@@ -448,6 +457,7 @@ export default function RegistroScreen() {
                 </View>
 
                 <Boton titulo="Crear cuenta" icono="check" onPress={enviar} cargando={cargando} />
+                {errorGeneral && <Aviso mensaje={errorGeneral} />}
             </View>
 
             <View style={styles.pie}>

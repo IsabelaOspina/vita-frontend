@@ -234,7 +234,7 @@ export default function CuentaScreen() {
             },
             {
                 frases: ['volver', 'atras', 'regresar', 'ir al panel', 'volver al panel'],
-                ejecutar: () => (router.canGoBack() ? router.back() : router.replace('/admin')),
+                ejecutar: () => (router.canGoBack() ? router.back() : router.navigate('/admin')),
             },
         ],
     });
@@ -243,6 +243,7 @@ export default function CuentaScreen() {
         <FondoPantalla>
             <Encabezado
                 volver
+                alVolver={() => router.navigate('/admin')}
                 titulo={cuenta?.nombre ?? 'Cuenta'}
                 subtitulo={cuenta ? (cuenta.personalSalud ? `${nombreRol(cuenta.rol)} · ${cuenta.personalSalud.especialidad}` : nombreRol(cuenta.rol)) : undefined}
             />

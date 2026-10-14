@@ -2,10 +2,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AccionesCuenta, accionesDeCuentaVoz } from '@/components/vita/acciones-cuenta';
+import { accionesComunesVoz, salir } from '@/components/vita/acciones-cuenta';
 import { Aviso } from '@/components/vita/aviso';
-import { BarraAccesibilidad } from '@/components/vita/barra-accesibilidad';
-import { Boton } from '@/components/vita/boton';
 import { ChipSeleccion } from '@/components/vita/chip-seleccion';
 import { ElementoLista } from '@/components/vita/elemento-lista';
 import { Encabezado } from '@/components/vita/encabezado';
@@ -102,9 +100,9 @@ export default function AdminScreen() {
   };
 
   useComandosPantalla({
-    titulo: 'Panel de administración',
+    titulo: 'Cuentas',
     descripcion:
-        'Panel de administración. Aquí están las cuentas de VITA. ' +
+        'Cuentas. Aquí están las cuentas de VITA. ' +
         'Puedes decir: lee las cuentas, registrar profesional, mostrar pacientes, o desactiva a, y el nombre.',
     ejemplos: [
       'lee las cuentas',
@@ -151,7 +149,7 @@ export default function AdminScreen() {
     acciones: [
       {
         frases: ['registrar profesional', 'registrar un profesional', 'nuevo profesional', 'agregar profesional', 'crear profesional', 'registrar personal'],
-        ejecutar: () => router.push('/admin/nuevo-personal'),
+        ejecutar: () => router.navigate('/admin/nuevo-personal'),
       },
       {
         frases: ['mostrar pacientes', 'ver pacientes', 'solo pacientes', 'los pacientes', 'filtra pacientes'],
@@ -165,18 +163,21 @@ export default function AdminScreen() {
         frases: ['mostrar todas', 'mostrar todos', 'ver todas', 'ver todos', 'todas las cuentas', 'quitar filtro'],
         ejecutar: () => elegirFiltro('TODOS'),
       },
-      ...accionesDeCuentaVoz(anunciar),
+      ...accionesComunesVoz('ADMIN', anunciar),
     ],
   });
 
   return (
       <FondoPantalla>
-        <Encabezado icono="admin" titulo="Administración" subtitulo="Gestiona las cuentas y el personal de salud de VITA." />
+        <Encabezado
+            alCerrarSesion={() => salir(anunciar)}
+            icono="admin"
+            titulo="Cuentas"
+            subtitulo="Pacientes y personal de salud de VITA."
+        />
 
-        <Boton titulo="Registrar profesional de salud" icono="personaAgregar" onPress={() => router.push('/admin/nuevo-personal')} />
-        <View style={styles.separador} />
 
-        <Tarjeta titulo="Cuentas" icono="pacientes">
+        <Tarjeta>
           <View style={styles.filtros} accessibilityRole="radiogroup" accessibilityLabel="Mostrar">
             {FILTROS.map((f) => (
                 <View key={f.filtro} style={styles.filtro}>
@@ -228,17 +229,11 @@ export default function AdminScreen() {
           </View>
         </Tarjeta>
 
-        <AccionesCuenta anunciar={anunciar} />
-        <View style={styles.espacioFlexible} />
-        <BarraAccesibilidad />
       </FondoPantalla>
   );
 }
 
 const styles = StyleSheet.create({
-  separador: {
-    height: Espacio.l,
-  },
   filtros: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -250,8 +245,5 @@ const styles = StyleSheet.create({
   },
   lista: {
     gap: Espacio.m,
-  },
-  espacioFlexible: {
-    flexGrow: 1,
   },
 });

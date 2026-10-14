@@ -2,11 +2,17 @@
   "routes": [
     { "route": "/login", "rewrite": "/login.html" },
     { "route": "/registro", "rewrite": "/registro.html" },
-    { "route": "/inicio", "rewrite": "/inicio.html" },
-    { "route": "/personal", "rewrite": "/personal.html" },
     { "route": "/cambiar-contrasena", "rewrite": "/cambiar-contrasena.html" },
+    { "route": "/paciente", "rewrite": "/paciente/index.html" },
+    { "route": "/paciente/accesibilidad", "rewrite": "/paciente/accesibilidad.html" },
+    { "route": "/paciente/mi-cuenta", "rewrite": "/paciente/mi-cuenta.html" },
+    { "route": "/personal", "rewrite": "/personal/index.html" },
+    { "route": "/personal/accesibilidad", "rewrite": "/personal/accesibilidad.html" },
+    { "route": "/personal/mi-cuenta", "rewrite": "/personal/mi-cuenta.html" },
     { "route": "/admin", "rewrite": "/admin/index.html" },
     { "route": "/admin/nuevo-personal", "rewrite": "/admin/nuevo-personal.html" },
+    { "route": "/admin/accesibilidad", "rewrite": "/admin/accesibilidad.html" },
+    { "route": "/admin/mi-cuenta", "rewrite": "/admin/mi-cuenta.html" },
     { "route": "/admin/cuenta/*", "rewrite": "/admin/cuenta/[id].html" }
   ],
   "navigationFallback": {
