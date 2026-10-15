@@ -1,4 +1,7 @@
-
-export type EstadoTomaMed =
-  | "PENDIENTE"
-  | "TOMADO";
+export enum EstadoTomaMed {
+  PENDIENTE = "PENDIENTE",
+  NOTIFICADO = "NOTIFICADO",
+  TOMADO = "TOMADO",
+  OMITIDO = "OMITIDO",
+  CANCELADO = "CANCELADO",
+}
