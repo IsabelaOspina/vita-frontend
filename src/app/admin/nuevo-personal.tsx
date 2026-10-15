@@ -5,7 +5,7 @@ import { StyleSheet, View, type TextInput } from 'react-native';
 import { accionesComunesVoz, salir } from '@/components/vita/acciones-cuenta';
 import { Aviso } from '@/components/vita/aviso';
 import { Boton } from '@/components/vita/boton';
-import { Campo } from '@/components/vita/campo';
+import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { Encabezado } from '@/components/vita/encabezado';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { Tarjeta } from '@/components/vita/tarjeta';
@@ -18,7 +18,6 @@ import { campoDelError } from '@/utils/textos';
 
 type Errores = Partial<Record<'nombre' | 'cedula' | 'correo' | 'telefono' | 'especialidad' | 'registro' | 'contrasena', string>>;
 
-/** Mismas reglas que PersonalRequest en el backend. */
 function validar(d: {
     nombre: string;
     cedula: string;
@@ -31,10 +30,8 @@ function validar(d: {
     const errores: Errores = {};
     if (!d.nombre.trim()) errores.nombre = 'Escribe el nombre completo';
     if (!d.cedula.trim()) errores.cedula = 'Escribe el número de cédula';
-    else if (!/^\d{5,12}$/.test(d.cedula.trim())) errores.cedula = 'La cédula debe tener solo números';
     if (!d.correo.trim()) errores.correo = 'Escribe el correo';
-    else if (!/^\S+@\S+\.\S+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
-    if (d.telefono.trim() && !/^\d{7,15}$/.test(d.telefono.trim())) errores.telefono = 'El teléfono debe tener solo números (mínimo 7)';
+    else if (!/^[^\s@]+@[^\s@]+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
     if (!d.especialidad.trim()) errores.especialidad = 'Escribe la especialidad';
     else if (d.especialidad.trim().length > 100) errores.especialidad = 'La especialidad admite máximo 100 caracteres';
     if (!d.registro.trim()) errores.registro = 'Escribe el número de registro profesional';
@@ -127,7 +124,7 @@ export default function NuevoPersonalScreen() {
         titulo: 'Registrar profesional de salud',
         descripcion:
             'Registrar profesional de salud. Llena el nombre, la cédula, el correo, la especialidad, ' +
-            'el número de registro profesional y una contraseña temporal. El teléfono es opcional.',
+            'el número de registro profesional y una contraseña temporal. El teléfono no es obligatorio.',
         ejemplos: [
             'el nombre es Laura Restrepo',
             'la especialidad es cardiología',
@@ -215,6 +212,7 @@ export default function NuevoPersonalScreen() {
             <Tarjeta titulo="Datos personales" icono="persona">
                 <Campo
                     etiqueta="Nombre completo"
+                    obligatorio
                     icono="persona"
                     placeholder="Ej: Laura Restrepo"
                     value={nombre}
@@ -227,18 +225,19 @@ export default function NuevoPersonalScreen() {
                 <Campo
                     ref={cedulaRef}
                     etiqueta="Cédula"
+                    obligatorio
                     icono="cedula"
-                    placeholder="Solo números"
+                    placeholder="Ej: 1094123456"
                     value={cedula}
                     onChangeText={setCedula}
                     error={errores.cedula}
-                    keyboardType="number-pad"
                     returnKeyType="next"
                     onSubmitEditing={() => correoRef.current?.focus()}
                 />
                 <Campo
                     ref={correoRef}
                     etiqueta="Correo electrónico"
+                    obligatorio
                     icono="correo"
                     placeholder="correo@ejemplo.com"
                     value={correo}
@@ -251,9 +250,9 @@ export default function NuevoPersonalScreen() {
                 />
                 <Campo
                     ref={telefonoRef}
-                    etiqueta="Teléfono (opcional)"
+                    etiqueta="Teléfono"
                     icono="telefono"
-                    placeholder="Solo números"
+                    placeholder="Ej: 3001234567"
                     value={telefono}
                     onChangeText={setTelefono}
                     error={errores.telefono}
@@ -267,6 +266,7 @@ export default function NuevoPersonalScreen() {
                 <Campo
                     ref={especialidadRef}
                     etiqueta="Especialidad"
+                    obligatorio
                     icono="medico"
                     placeholder="Ej: Medicina general"
                     value={especialidad}
@@ -279,6 +279,7 @@ export default function NuevoPersonalScreen() {
                 <Campo
                     ref={registroRef}
                     etiqueta="Número de registro profesional"
+                    obligatorio
                     icono="insignia"
                     placeholder="Ej: RM-10234"
                     value={registro}
@@ -294,6 +295,7 @@ export default function NuevoPersonalScreen() {
                 <Campo
                     ref={contrasenaRef}
                     etiqueta="Contraseña temporal"
+                    obligatorio
                     icono="candado"
                     placeholder="Mínimo 8 caracteres"
                     ayuda="El profesional podrá cambiarla después de iniciar sesión."
@@ -307,6 +309,7 @@ export default function NuevoPersonalScreen() {
             </Tarjeta>
 
             <View style={styles.botones}>
+                <NotaCamposObligatorios />
                 <Boton titulo="Registrar profesional" icono="check" onPress={registrar} cargando={cargando} />
                 {errorGeneral && <Aviso mensaje={errorGeneral} />}
                 <Boton titulo="Cancelar" variante="secundario" onPress={volver} />

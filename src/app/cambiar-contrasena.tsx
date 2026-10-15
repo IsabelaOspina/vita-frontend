@@ -4,7 +4,7 @@ import { StyleSheet, View, type TextInput } from 'react-native';
 
 import { Aviso } from '@/components/vita/aviso';
 import { Boton } from '@/components/vita/boton';
-import { Campo } from '@/components/vita/campo';
+import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { Encabezado } from '@/components/vita/encabezado';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { Tarjeta } from '@/components/vita/tarjeta';
@@ -37,7 +37,6 @@ export default function CambiarContrasenaScreen() {
         const encontrados: Errores = {};
         if (!actual) encontrados.actual = 'Escribe tu contraseña actual';
         if (nueva.length < 8) encontrados.nueva = 'La nueva contraseña debe tener al menos 8 caracteres';
-        else if (nueva === actual) encontrados.nueva = 'La nueva contraseña debe ser diferente a la actual';
         if (!encontrados.nueva && confirmacion !== nueva) encontrados.confirmacion = 'Las contraseñas no coinciden';
         setErrores(encontrados);
         setAviso(null);
@@ -114,6 +113,7 @@ export default function CambiarContrasenaScreen() {
             <Tarjeta>
                 <Campo
                     etiqueta="Contraseña actual"
+                    obligatorio
                     icono="candado"
                     placeholder="La que usas hoy"
                     value={actual}
@@ -127,6 +127,7 @@ export default function CambiarContrasenaScreen() {
                 <Campo
                     ref={nuevaRef}
                     etiqueta="Nueva contraseña"
+                    obligatorio
                     icono="llave"
                     placeholder="Mínimo 8 caracteres"
                     value={nueva}
@@ -140,6 +141,7 @@ export default function CambiarContrasenaScreen() {
                 <Campo
                     ref={confirmacionRef}
                     etiqueta="Confirmar contraseña"
+                    obligatorio
                     icono="llave"
                     placeholder="Repite la nueva contraseña"
                     value={confirmacion}
@@ -150,6 +152,7 @@ export default function CambiarContrasenaScreen() {
                     returnKeyType="go"
                     onSubmitEditing={guardar}
                 />
+                <NotaCamposObligatorios />
                 <Boton titulo="Guardar contraseña" icono="check" onPress={guardar} cargando={cargando} />
                 {aviso && <Aviso tipo={aviso.tipo} mensaje={aviso.mensaje} />}
             </Tarjeta>

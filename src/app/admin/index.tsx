@@ -80,7 +80,7 @@ export default function AdminScreen() {
     anunciar(`Mostrando ${cantidad} ${datos.plural}`);
   };
 
-  const verCuenta = (cuenta: Cuenta) => router.push({ pathname: '/admin/cuenta/[id].tsx', params: { id: String(cuenta.id) } });
+  const verCuenta = (cuenta: Cuenta) => router.push({ pathname: '/admin/cuenta/[id]', params: { id: String(cuenta.id) } });
 
   const cambiarEstado = async (cuenta: Cuenta) => {
     setAviso(null);

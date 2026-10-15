@@ -34,8 +34,32 @@ export function decimal(valor: number | null | undefined): string {
     return valor.toLocaleString('es-CO', { maximumFractionDigits: 1 });
 }
 
-/** Síntomas que se sugieren cuando la persona todavía no ha registrado ninguno. */
-export const SINTOMAS_COMUNES = ['Dolor de cabeza', 'Mareo', 'Náuseas', 'Cansancio', 'Fiebre', 'Dolor de estómago'];
+/**
+ * Síntomas que se sugieren al registrar (después de los que la persona ya ha registrado).
+ * Los primeros se muestran con el campo vacío; el resto aparece al escribir.
+ */
+export const SINTOMAS_COMUNES = [
+    'Dolor de cabeza',
+    'Mareo',
+    'Náuseas',
+    'Cansancio',
+    'Fiebre',
+    'Dolor de estómago',
+    'Dolor de espalda',
+    'Dolor de garganta',
+    'Dolor de pecho',
+    'Dolor muscular',
+    'Dolor en las articulaciones',
+    'Dificultad para respirar',
+    'Tos',
+    'Vómito',
+    'Diarrea',
+    'Palpitaciones',
+    'Visión borrosa',
+    'Insomnio',
+    'Falta de apetito',
+    'Escalofríos',
+];
 
 // ---------------------------------------------------------------------------------------------
 // Filtros del historial

@@ -43,6 +43,8 @@ export type FuenteSintomas = {
     rutas: {
         lista: Href;
         detalle: (id: number) => Href;
+        /** El historial completo; puede abrirse con filtros ya puestos (periodo, tipo, nivel, orden). */
+        historial: (filtros?: Record<string, string>) => Href;
         evolucion: Href;
         nuevo?: Href;
         editar?: (id: number) => Href;
@@ -62,6 +64,7 @@ export const fuentePaciente: FuenteSintomas = {
     rutas: {
         lista: '/paciente/sintomas',
         detalle: (id) => ({ pathname: '/paciente/sintomas/[id]', params: { id: String(id) } }),
+        historial: (filtros) => ({ pathname: '/paciente/sintomas/historial', params: filtros ?? {} }),
         evolucion: '/paciente/sintomas/evolucion',
         nuevo: '/paciente/sintomas/nuevo',
         editar: (id) => ({ pathname: '/paciente/sintomas/editar/[id]', params: { id: String(id) } }),
@@ -86,7 +89,24 @@ export function fuenteProfesional(pacienteId: number, nombre: string): FuenteSin
         rutas: {
             lista: { pathname: '/personal/paciente/[id]', params: { id: String(pacienteId), nombre } },
             detalle: (id) => ({ pathname: '/personal/paciente/sintoma', params: { ...params, sintoma: String(id) } }),
+            historial: (filtros) => ({ pathname: '/personal/paciente/historial', params: { ...params, ...filtros } }),
             evolucion: { pathname: '/personal/paciente/evolucion', params },
         },
     };
+}
+
+/**
+ * Mensaje para mostrar en la pantalla a la que se vuelve (por ejemplo "Se eliminó el síntoma…"
+ * al volver del detalle al historial). La pantalla lo toma una sola vez al recibir el foco.
+ */
+let avisoPendiente: string | null = null;
+
+export function dejarAvisoPendiente(mensaje: string) {
+    avisoPendiente = mensaje;
+}
+
+export function tomarAvisoPendiente(): string | null {
+    const mensaje = avisoPendiente;
+    avisoPendiente = null;
+    return mensaje;
 }

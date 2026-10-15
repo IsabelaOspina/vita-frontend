@@ -28,6 +28,8 @@ type Props = Omit<TextInputProps, 'style'> & {
     error?: string;
     /** Muestra el botón del ojo para ver u ocultar la contraseña. */
     esContrasena?: boolean;
+    /** Marca el campo con un asterisco rojo (y lo anuncia como obligatorio al lector de pantalla). */
+    obligatorio?: boolean;
 };
 
 /**
@@ -35,7 +37,7 @@ type Props = Omit<TextInputProps, 'style'> & {
  * para que siempre se sepa qué se está llenando, incluso con texto escrito.
  */
 export const Campo = forwardRef<TextInput, Props>(function Campo(
-    { etiqueta, icono, ayuda, error, esContrasena, onFocus, onBlur, ...props },
+    { etiqueta, icono, ayuda, error, esContrasena, obligatorio, onFocus, onBlur, ...props },
     ref,
 ) {
     const { colores, tamano, leer } = useAccesibilidad();
@@ -49,6 +51,7 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
         <View style={styles.contenedor}>
             <Texto variante="etiqueta" color="texto">
                 {etiqueta}
+                {obligatorio ? <MarcaObligatorio /> : null}
             </Texto>
 
             <View
@@ -69,10 +72,11 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
                     placeholderTextColor={colores.textoTenue}
                     accessibilityLabel={etiqueta}
                     accessibilityHint={error ?? ayuda}
+                    aria-required={obligatorio}
                     onFocus={(e) => {
                         setEnfocado(true);
                         // Con modo voz, dice qué campo se está llenando y su error o ayuda
-                        leer([etiqueta, error ?? ayuda].filter(Boolean).join('. '));
+                        leer([obligatorio ? `${etiqueta}, obligatorio` : etiqueta, error ?? ayuda].filter(Boolean).join('. '));
                         onFocus?.(e);
                     }}
                     onBlur={(e) => {
@@ -125,8 +129,10 @@ const styles = StyleSheet.create({
     },
     input: {
         flex: 1,
+        // Sin esto, en web el input no se encoge y empuja el botón del ojo fuera del campo
         minWidth: 0,
         paddingVertical: Espacio.m,
+        // En web quita el recuadro azul por defecto: el borde del campo ya indica el foco
         outlineStyle: 'none',
     } as object,
     botonOjo: {
@@ -141,3 +147,23 @@ const styles = StyleSheet.create({
         flexShrink: 1,
     },
 });
+/** Asterisco rojo junto a la etiqueta de un campo obligatorio. */
+export function MarcaObligatorio() {
+    return (
+        <Texto variante="etiqueta" color="error" accessibilityElementsHidden importantForAccessibility="no">
+            {' *'}
+        </Texto>
+    );
+}
+
+/** Nota al final de un formulario: explica el asterisco de los campos obligatorios. */
+export function NotaCamposObligatorios() {
+    return (
+        <Texto variante="pequeno" color="textoSecundario" style={{ textAlign: 'right' }}>
+            <Texto variante="pequeno" color="error">
+                *
+            </Texto>{' '}
+            Campo obligatorio
+        </Texto>
+    );
+}

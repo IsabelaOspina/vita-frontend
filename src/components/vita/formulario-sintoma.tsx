@@ -16,7 +16,7 @@ import { campoDelError } from '@/utils/textos';
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Aviso } from './aviso';
 import { Boton } from './boton';
-import { Campo } from './campo';
+import { Campo, NotaCamposObligatorios } from './campo';
 import { Encabezado } from './encabezado';
 import { EstadoCarga } from './estado-carga';
 import { FondoPantalla } from './fondo-pantalla';
@@ -26,6 +26,9 @@ import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
 
 type Errores = Partial<Record<'tipo' | 'intensidad' | 'cuando' | 'observaciones', string>>;
+
+/** Cuántos síntomas sugeridos se muestran a la vez. */
+const MAX_SUGERENCIAS = 6;
 
 /** Tolerancia del backend por si el reloj del celular va adelantado. */
 const TOLERANCIA_FUTURO_MS = 5 * 60 * 1000;
@@ -97,7 +100,7 @@ export function FormularioSintoma({ id }: Props) {
             .then((tipos) => {
                 const propios = tipos.map((t) => t.tipo);
                 const comunes = SINTOMAS_COMUNES.filter((c) => !propios.some((p) => aPalabras(p) === aPalabras(c)));
-                setSugerencias([...propios, ...comunes].slice(0, 6));
+                setSugerencias([...propios, ...comunes]);
             })
             .catch(() => {
                 // Sin sugerencias propias se dejan las comunes
@@ -136,14 +139,36 @@ export function FormularioSintoma({ id }: Props) {
     };
     const cambiarTipo = cambiar('tipo', setTipo);
     const cambiarCuando = cambiar('cuando', setCuando);
+    /**
+     * Si la persona está escribiendo en "Otra fecha y hora", lo escrito se respeta tal cual aunque
+     * a mitad de camino coincida con un botón ("ayer" de "ayer a las 8 pm"). Los botones solo se
+     * marcan cuando se tocan (o cuando la fecha llega por voz o al editar).
+     */
+    const [escribiendoFecha, setEscribiendoFecha] = useState(false);
+    const elegirCuando = (valor: string) => {
+        setEscribiendoFecha(false);
+        cambiarCuando(valor);
+    };
+    const escribirCuando = (texto: string) => {
+        setEscribiendoFecha(true);
+        cambiarCuando(texto);
+    };
     const cambiarObservaciones = cambiar('observaciones', setObservaciones);
 
     const volver = () => (router.canGoBack() ? router.back() : router.replace('/paciente/sintomas'));
 
+    // Sugerencias mientras se escribe: con el campo vacío, las más usadas; al escribir, las que contienen
+    // lo escrito ("dol" → "Dolor de cabeza", "Dolor de espalda"…). Así se termina de escribir con un toque.
+    const escrito = aPalabras(tipo);
+    const sugerenciasVisibles = (escrito ? sugerencias.filter((s) => aPalabras(s).includes(escrito)) : sugerencias).slice(
+        0,
+        MAX_SUGERENCIAS,
+    );
+
     // Lo que se muestra debajo de "¿Cuándo?": cómo se va a guardar
     const fechaEntendida = cuando.trim() ? interpretarCuando(cuando) : null;
     const ayudaCuando = !cuando.trim()
-        ? 'Si lo dejas vacío, se guarda con la hora de ahora.'
+        ? 'Si no indicas la fecha, se registra con la hora actual.'
         : fechaEntendida
             ? `Se guardará: ${fechaHoraLarga(aFechaHoraLocal(fechaEntendida))}`
             : undefined;
@@ -206,7 +231,7 @@ export function FormularioSintoma({ id }: Props) {
     const campoIntensidad: CampoVoz = {
         claves: ['intensidad', 'nivel', 'que tan fuerte', 'fuerza'],
         etiqueta: 'Intensidad',
-        pregunta: '¿Qué tan fuerte es, del 1 al 10? 1 es muy leve y 10 es insoportable.',
+        pregunta: '¿Qué intensidad tiene, en una escala de 1 a 10? 1 es una molestia mínima y 10 la máxima intensidad.',
         tipo: 'texto',
         valor: intensidad === null ? '' : String(intensidad),
         asignar: (valor) => {
@@ -226,7 +251,10 @@ export function FormularioSintoma({ id }: Props) {
         tipo: 'texto',
         valor: cuando,
         // En un síntoma nuevo, "ahora" es dejarlo vacío (el backend usa la hora actual)
-        asignar: (valor) => setCuando(!editando && /^(ahora|ahorita|ya)$/i.test(valor.trim()) ? '' : valor.toLowerCase()),
+        asignar: (valor) => {
+            setEscribiendoFecha(false);
+            setCuando(!editando && /^(ahora|ahorita|ya)$/i.test(valor.trim()) ? '' : valor.toLowerCase());
+        },
         opcional: true,
     };
     const campoObservaciones: CampoVoz = {
@@ -311,7 +339,9 @@ export function FormularioSintoma({ id }: Props) {
             { valor: 'hace 3 horas', titulo: 'Hace 3 horas' },
             { valor: 'ayer', titulo: 'Ayer' },
         ];
-    const opcionCuando = opcionesCuando.find((o) => o.valor === cuando.trim().toLowerCase())?.valor ?? '__otro';
+    const opcionCuando = escribiendoFecha
+        ? '__otro'
+        : (opcionesCuando.find((o) => o.valor === cuando.trim().toLowerCase())?.valor ?? '__otro');
 
     return (
         <FondoPantalla>
@@ -331,19 +361,23 @@ export function FormularioSintoma({ id }: Props) {
                             error={errores.tipo}
                             autoCapitalize="sentences"
                             maxLength={100}
+                            obligatorio
                         />
-                        <View style={styles.sugerencias}>
-                            <Texto variante="pequeno" color="textoSecundario">
-                                Toca uno para elegirlo:
-                            </Texto>
-                            <OpcionesFiltro
-                                etiqueta="Síntoma sugerido"
-                                opciones={sugerencias.map((s) => ({ valor: s, titulo: s }))}
-                                valor={sugerencias.find((s) => aPalabras(s) === aPalabras(tipo)) ?? ''}
-                                onCambiar={cambiarTipo}
-                            />
-                        </View>
+                        {sugerenciasVisibles.length > 0 && (
+                            <View style={styles.sugerencias}>
+                                <Texto variante="pequeno" color="textoSecundario">
+                                    {escrito ? 'Toca una sugerencia para completarlo:' : 'Toca uno para elegirlo:'}
+                                </Texto>
+                                <OpcionesFiltro
+                                    etiqueta="Síntoma sugerido"
+                                    opciones={sugerenciasVisibles.map((s) => ({ valor: s, titulo: s }))}
+                                    valor={sugerenciasVisibles.find((s) => aPalabras(s) === escrito) ?? ''}
+                                    onCambiar={cambiarTipo}
+                                />
+                            </View>
+                        )}
                         <SelectorIntensidad
+                            obligatorio
                             valor={intensidad}
                             onCambiar={(n) => {
                                 setIntensidad(n);
@@ -353,17 +387,17 @@ export function FormularioSintoma({ id }: Props) {
                         />
                     </Tarjeta>
 
-                    <Tarjeta titulo="Más detalles (opcional)" icono="reloj">
+                    <Tarjeta titulo="Detalles adicionales" icono="reloj">
                         <View style={styles.sugerencias}>
                             <Texto variante="etiqueta">¿Cuándo?</Texto>
-                            <OpcionesFiltro etiqueta="Cuándo" opciones={opcionesCuando} valor={opcionCuando} onCambiar={cambiarCuando} />
+                            <OpcionesFiltro etiqueta="Cuándo" opciones={opcionesCuando} valor={opcionCuando} onCambiar={elegirCuando} />
                         </View>
                         <Campo
                             etiqueta="Otra fecha y hora"
                             icono="calendario"
                             placeholder="Ej: ayer a las 8 pm, o 14/10/2026 09:30"
                             value={opcionCuando === '__otro' ? cuando : ''}
-                            onChangeText={cambiarCuando}
+                            onChangeText={escribirCuando}
                             error={errores.cuando}
                             ayuda={ayudaCuando}
                             returnKeyType="next"
@@ -383,6 +417,7 @@ export function FormularioSintoma({ id }: Props) {
                     </Tarjeta>
 
                     <View style={styles.botones}>
+                        <NotaCamposObligatorios />
                         <Boton titulo={editando ? 'Guardar cambios' : 'Guardar síntoma'} icono="check" onPress={guardar} cargando={guardando} />
                         {errorGeneral && <Aviso mensaje={errorGeneral} />}
                         <Boton titulo="Cancelar" variante="secundario" onPress={volver} />

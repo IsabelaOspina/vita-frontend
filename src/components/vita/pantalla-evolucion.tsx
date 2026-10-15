@@ -6,20 +6,23 @@ import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import type { AgrupacionTiempo } from '@/dto/AgrupacionTiempo';
+import type { SintomaEvolucionPunto } from '@/dto/SintomaEvolucionPunto';
 import type { SintomaEvolucionResponse } from '@/dto/SintomaEvolucionResponse';
 import type { Tendencia } from '@/dto/Tendencia';
 import { aPalabras, type AccionVoz, type Resultado } from '@/utils/comandos-voz';
 import { diasAtras } from '@/utils/fechas';
 import type { FuenteSintomas } from '@/utils/fuente-sintomas';
 import { mensajeDeError } from '@/utils/sesion';
-import { nombreTendencia } from '@/utils/sintomas';
+import { decimal, nombreNivel } from '@/utils/sintomas';
 
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Encabezado } from './encabezado';
 import { EstadoCarga } from './estado-carga';
 import { FondoPantalla } from './fondo-pantalla';
-import { etiquetaPunto, GraficaEvolucion, lecturaPunto } from './grafica-evolucion';
+import { ControlSegmentado } from './control-segmentado';
+import { etiquetaPunto, GraficaEvolucion, lecturaPunto, nivelDePunto } from './grafica-evolucion';
 import { Icono, type NombreIcono } from './icono';
+import { coloresNivel } from './insignia-intensidad';
 import { OpcionesFiltro } from './opciones-filtro';
 import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
@@ -40,11 +43,38 @@ const NOMBRE_RANGO: Record<Rango, string> = {
     anio: 'Último año',
 };
 
-const AGRUPACIONES: { valor: AgrupacionTiempo; titulo: string }[] = [
-    { valor: 'DIA', titulo: 'Por día' },
-    { valor: 'SEMANA', titulo: 'Por semana' },
-    { valor: 'MES', titulo: 'Por mes' },
-];
+/** Cómo se agrupa cada periodo para que la gráfica tenga pocos puntos y se lea bien. */
+const AGRUPACION_DE_RANGO: Record<Rango, AgrupacionTiempo> = {
+    semana: 'DIA',
+    mes: 'DIA',
+    trimestre: 'SEMANA',
+    anio: 'MES',
+};
+
+const TITULO_AGRUPACION: Record<AgrupacionTiempo, string> = {
+    DIA: 'Intensidad por día',
+    SEMANA: 'Intensidad por semana',
+    MES: 'Intensidad por mes',
+};
+
+/** La frase grande de la tendencia. */
+const TITULO_TENDENCIA: Record<Tendencia, string> = {
+    MEJORANDO: 'Va mejorando',
+    EMPEORANDO: 'Va empeorando',
+    ESTABLE: 'Se mantiene estable',
+    SIN_DATOS: 'Aún no hay suficientes datos',
+};
+
+/** "La intensidad promedio bajó de 8 a 2 en los últimos 30 días." */
+function fraseCambio(puntos: SintomaEvolucionPunto[], rango: Rango): string {
+    const periodo = NOMBRE_RANGO[rango].toLowerCase().replace(/^últimos?/, (m) => `en los ${m}`).replace('en los último año', 'en el último año');
+    if (puntos.length === 0) return `No hay registros ${periodo.replace(/^en /, 'en ')}.`;
+    if (puntos.length === 1) return `Solo hay un periodo con registros ${periodo}.`;
+    const primero = Math.round(puntos[0].intensidadPromedio * 10) / 10;
+    const ultimo = Math.round(puntos[puntos.length - 1].intensidadPromedio * 10) / 10;
+    if (primero === ultimo) return `La intensidad promedio se mantuvo en ${decimal(primero)} ${periodo}.`;
+    return `La intensidad promedio ${ultimo < primero ? 'bajó' : 'subió'} de ${decimal(primero)} a ${decimal(ultimo)} ${periodo}.`;
+}
 
 const ICONO_TENDENCIA: Record<Tendencia, NombreIcono> = {
     MEJORANDO: 'mejorando',
@@ -63,11 +93,13 @@ type Props = {
  * periodo (mejorando, estable o empeorando). Se puede ver todo junto o un solo síntoma.
  */
 export function PantallaEvolucion({ fuente, titulo }: Props) {
-    const { anunciar, leer, colores } = useAccesibilidad();
+    const { anunciar, leer, colores, altoContraste } = useAccesibilidad();
 
     const [tipos, setTipos] = useState<string[]>([]);
     const [tipo, setTipo] = useState<string | null>(null);
     const [rango, setRango] = useState<Rango>('mes');
+    // La agrupación sale del periodo (7 y 30 días: por día; 3 meses: por semana; 1 año: por mes).
+    // Por voz todavía se puede pedir otra ("por semana").
     const [agrupacion, setAgrupacion] = useState<AgrupacionTiempo>('DIA');
     const [datos, setDatos] = useState<SintomaEvolucionResponse | null>(null);
     const [cargando, setCargando] = useState(true);
@@ -117,9 +149,7 @@ export function PantallaEvolucion({ fuente, titulo }: Props) {
     };
 
     const elegirRango = (valor: Rango) => {
-        // Por día, un año serían 365 barras: se agrupa por mes
-        if (valor === 'anio' && agrupacion === 'DIA') setAgrupacion('MES');
-        if (valor === 'semana' && agrupacion === 'MES') setAgrupacion('DIA');
+        setAgrupacion(AGRUPACION_DE_RANGO[valor]);
         setRango(valor);
     };
 
@@ -192,41 +222,22 @@ export function PantallaEvolucion({ fuente, titulo }: Props) {
     const fondoTendencia =
         tendencia === 'MEJORANDO' ? colores.exitoFondo : tendencia === 'EMPEORANDO' ? colores.errorFondo : colores.superficieSuave;
 
+    // Los tres números del periodo, calculados de los mismos puntos de la gráfica
+    const registros = puntos.reduce((total, p) => total + p.cantidad, 0);
+    const promedio = registros ? puntos.reduce((total, p) => total + p.intensidadPromedio * p.cantidad, 0) / registros : null;
+    const maximo = puntos.length ? Math.max(...puntos.map((p) => p.intensidadMaxima)) : null;
+    const cifras = [
+        { valor: promedio === null ? '—' : decimal(promedio), nombre: 'promedio' },
+        { valor: maximo === null ? '—' : String(maximo), nombre: 'máximo' },
+        { valor: String(registros), nombre: registros === 1 ? 'registro' : 'registros' },
+    ];
+
     return (
         <FondoPantalla>
             <Encabezado volver alVolver={volver} titulo={titulo} subtitulo="¿Cómo ha cambiado la intensidad?" />
 
-            <Tarjeta titulo={tipo ?? 'Todos los síntomas'} icono="grafica">
-                <Texto variante="pequeno" color="textoSecundario">
-                    {NOMBRE_RANGO[rango]} · {AGRUPACIONES.find((x) => x.valor === agrupacion)?.titulo.toLowerCase()}
-                </Texto>
-                <EstadoCarga cargando={cargando} error={error} reintentar={cargar} hayDatos={!!datos} />
-                {datos && (
-                    <>
-                        <View
-                            accessible
-                            accessibilityLabel={`Tendencia: ${nombreTendencia(tendencia)}`}
-                            style={[styles.tendencia, { backgroundColor: fondoTendencia, borderColor: colorTendencia }]}>
-                            <Icono nombre={ICONO_TENDENCIA[tendencia]} tamano={20} color={colorTendencia} />
-                            <Texto variante="etiqueta" peso="700" style={{ color: colorTendencia }}>
-                                {nombreTendencia(tendencia)}
-                            </Texto>
-                        </View>
-
-                        {puntos.length > 0 ? (
-                            <GraficaEvolucion puntos={puntos} agrupacion={agrupacion} descripcion={datos.textoLectura} />
-                        ) : null}
-
-                        <View style={[styles.lectura, { borderLeftColor: colores.primario, backgroundColor: colores.fondo }]}>
-                            <Texto variante="etiqueta" peso="400" color="textoSecundario">
-                                {datos.textoLectura}
-                            </Texto>
-                        </View>
-                    </>
-                )}
-            </Tarjeta>
-
-            <Tarjeta titulo="Cambiar lo que ves" icono="ajustes">
+            {/* Filtros arriba: cambian todo lo que se ve debajo */}
+            <Tarjeta>
                 <View style={styles.filtros}>
                     <Texto variante="etiqueta">Síntoma</Texto>
                     <OpcionesFiltro
@@ -235,33 +246,89 @@ export function PantallaEvolucion({ fuente, titulo }: Props) {
                         valor={tipo ?? ''}
                         onCambiar={(valor) => setTipo(valor || null)}
                     />
-                    <Texto variante="etiqueta">Periodo</Texto>
-                    <OpcionesFiltro etiqueta="Periodo" opciones={RANGOS} valor={rango} onCambiar={elegirRango} />
-                    <Texto variante="etiqueta">Agrupar</Texto>
-                    <OpcionesFiltro
-                        etiqueta="Agrupar"
-                        // Un año por día serían demasiadas barras
-                        opciones={rango === 'anio' ? AGRUPACIONES.slice(1) : AGRUPACIONES}
-                        valor={agrupacion}
-                        onCambiar={setAgrupacion}
-                    />
+                    <Texto variante="etiqueta" style={styles.separado}>
+                        Periodo
+                    </Texto>
+                    <ControlSegmentado etiqueta="Periodo" opciones={RANGOS} valor={rango} onCambiar={elegirRango} />
                 </View>
             </Tarjeta>
 
-            {puntos.length > 0 && (
-                <Tarjeta titulo={AGRUPACIONES.find((a) => a.valor === agrupacion)?.titulo ?? 'Detalle'} icono="reloj">
-                    {/* La misma información de la gráfica, en texto (para leerla con calma o con lector de pantalla) */}
-                    {[...puntos].reverse().map((p) => (
-                        <View key={p.inicio} style={[styles.fila, { borderColor: colores.borde }]} accessible accessibilityLabel={lecturaPunto(p, agrupacion)}>
-                            <Texto variante="cuerpo" peso="700">
-                                {etiquetaPunto(p, agrupacion)}
-                            </Texto>
-                            <Texto variante="pequeno" color="textoSecundario">
-                                {lecturaPunto(p, agrupacion).split(': ')[1]}
-                            </Texto>
+            <EstadoCarga cargando={cargando} error={error} reintentar={cargar} hayDatos={!!datos} />
+
+            {datos && (
+                <>
+                    {/* La respuesta primero: ¿voy mejorando? */}
+                    <Tarjeta>
+                        <View style={styles.respuesta} accessible accessibilityLabel={`${TITULO_TENDENCIA[tendencia]}. ${datos.textoLectura}`}>
+                            <View style={[styles.iconoTendencia, { backgroundColor: fondoTendencia, borderColor: colorTendencia }]}>
+                                <Icono nombre={ICONO_TENDENCIA[tendencia]} tamano={30} color={colorTendencia} />
+                            </View>
+                            <View style={styles.textosRespuesta}>
+                                <Texto variante="subtitulo" peso="800" style={{ color: colorTendencia }}>
+                                    {TITULO_TENDENCIA[tendencia]}
+                                </Texto>
+                                <Texto variante="etiqueta" peso="400" color="textoSecundario">
+                                    {tipo ? `${tipo}. ` : ''}
+                                    {fraseCambio(puntos, rango)}
+                                </Texto>
+                            </View>
                         </View>
-                    ))}
-                </Tarjeta>
+                        <View style={styles.cifras}>
+                            {cifras.map((c) => (
+                                <View
+                                    key={c.nombre}
+                                    style={[styles.cifra, { borderColor: colores.borde }]}
+                                    accessible
+                                    accessibilityLabel={`${c.nombre}: ${c.valor}`}>
+                                    <Texto variante="subtitulo" peso="800" centrado>
+                                        {c.valor}
+                                    </Texto>
+                                    <Texto variante="pequeno" color="textoSecundario" centrado>
+                                        {c.nombre}
+                                    </Texto>
+                                </View>
+                            ))}
+                        </View>
+                    </Tarjeta>
+
+                    {puntos.length > 0 && (
+                        <Tarjeta titulo={TITULO_AGRUPACION[agrupacion]} icono="grafica">
+                            <GraficaEvolucion puntos={puntos} agrupacion={agrupacion} descripcion={datos.textoLectura} />
+                        </Tarjeta>
+                    )}
+
+                    {puntos.length > 0 && (
+                        <Tarjeta titulo="Detalle" icono="reloj">
+                            {/* La misma información de la gráfica en filas cortas, de lo más reciente a lo más antiguo */}
+                            {[...puntos].reverse().map((p) => {
+                                const nivel = nivelDePunto(p);
+                                const { color } = coloresNivel(nivel, colores, altoContraste);
+                                return (
+                                    <View
+                                        key={p.inicio}
+                                        style={styles.filaDetalle}
+                                        accessible
+                                        accessibilityLabel={`${lecturaPunto(p, agrupacion)}, ${nombreNivel(nivel).toLowerCase()}`}>
+                                        <Texto variante="pequeno" peso="600" style={styles.fechaDetalle} numberOfLines={2}>
+                                            {etiquetaPunto(p, agrupacion)}
+                                        </Texto>
+                                        <View style={[styles.pista, { backgroundColor: colores.superficieSuave, borderColor: colores.borde }]}>
+                                            <View
+                                                style={[
+                                                    styles.relleno,
+                                                    { width: `${Math.max(4, (p.intensidadPromedio / 10) * 100)}%`, backgroundColor: color },
+                                                ]}
+                                            />
+                                        </View>
+                                        <Texto variante="etiqueta" peso="800" style={styles.valorDetalle}>
+                                            {decimal(p.intensidadPromedio)}
+                                        </Texto>
+                                    </View>
+                                );
+                            })}
+                        </Tarjeta>
+                    )}
+                </>
             )}
         </FondoPantalla>
     );
@@ -271,25 +338,59 @@ const styles = StyleSheet.create({
     filtros: {
         gap: Espacio.s,
     },
-    tendencia: {
-        alignSelf: 'flex-start',
+    separado: {
+        marginTop: Espacio.s,
+    },
+    respuesta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Espacio.xs,
-        paddingHorizontal: Espacio.m,
-        paddingVertical: Espacio.xs,
-        borderRadius: Radio.total,
+        gap: Espacio.m,
+    },
+    iconoTendencia: {
+        width: 60,
+        height: 60,
+        borderRadius: Radio.m,
         borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    lectura: {
-        borderLeftWidth: 4,
-        borderRadius: Radio.s,
-        padding: Espacio.m,
+    textosRespuesta: {
+        flex: 1,
+        gap: 2,
     },
-    fila: {
+    cifras: {
+        flexDirection: 'row',
+        gap: Espacio.s,
+    },
+    cifra: {
+        flex: 1,
         borderWidth: 1.5,
         borderRadius: Radio.m,
         paddingVertical: Espacio.s,
-        paddingHorizontal: Espacio.m,
+        paddingHorizontal: Espacio.xs,
+    },
+    filaDetalle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Espacio.s,
+        minHeight: 36,
+    },
+    fechaDetalle: {
+        width: 104,
+    },
+    pista: {
+        flex: 1,
+        height: 14,
+        borderRadius: 7,
+        borderWidth: 1,
+        overflow: 'hidden',
+    },
+    relleno: {
+        height: '100%',
+        borderRadius: 7,
+    },
+    valorDetalle: {
+        width: 34,
+        textAlign: 'right',
     },
 });

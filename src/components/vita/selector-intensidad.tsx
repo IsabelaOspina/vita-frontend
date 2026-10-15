@@ -4,11 +4,14 @@ import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { nivelDe, nombreNivel } from '@/utils/sintomas';
 
+import { MarcaObligatorio } from './campo';
 import { Icono } from './icono';
 import { coloresNivel } from './insignia-intensidad';
 import { Texto } from './texto';
 
 type Props = {
+    /** Marca la intensidad con el asterisco de campo obligatorio. */
+    obligatorio?: boolean;
     valor: number | null;
     onCambiar: (valor: number) => void;
     error?: string;
@@ -17,17 +20,24 @@ type Props = {
 const NUMEROS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 /** Escala del 1 al 10 en botones grandes, cada uno con el color de su nivel. */
-export function SelectorIntensidad({ valor, onCambiar, error }: Props) {
+export function SelectorIntensidad({ valor, onCambiar, error, obligatorio }: Props) {
     const { colores, altoContraste, leer } = useAccesibilidad();
 
     return (
         <View style={styles.contenedor}>
-            <Texto variante="etiqueta">Intensidad (del 1 al 10)</Texto>
+            <Texto variante="etiqueta">
+                Intensidad
+                {obligatorio ? <MarcaObligatorio /> : null}
+            </Texto>
             <Texto variante="pequeno" color="textoSecundario">
-                1 es muy leve y 10 es insoportable.
+                Valora la intensidad en una escala de 1 a 10, donde 1 corresponde a una molestia mínima y 10 a la máxima
+                intensidad.
+            </Texto>
+            <Texto variante="pequeno" color="textoSecundario">
+                Leve: 1 a 3 · Moderada: 4 a 6 · Severa: 7 a 10
             </Texto>
 
-            <View style={styles.escala} accessibilityRole="radiogroup" accessibilityLabel="Intensidad del 1 al 10">
+            <View style={styles.escala} accessibilityRole="radiogroup" accessibilityLabel="Intensidad, escala de 1 a 10">
                 {NUMEROS.map((n) => {
                     const elegido = valor === n;
                     const nivel = nivelDe(n);

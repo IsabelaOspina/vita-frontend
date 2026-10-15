@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 
+import { BarraAccesibilidad } from './barra-accesibilidad';
 import { Icono, type NombreIcono } from './icono';
 import { Texto } from './texto';
 
@@ -18,10 +19,16 @@ type Props = {
     alVolver?: () => void;
     /** Muestra el botón "Cerrar sesión" arriba a la derecha (en las pantallas principales). */
     alCerrarSesion?: () => void;
+    /**
+     * Muestra debajo del título la barra de accesibilidad (modo voz, alto contraste y tamaño de texto).
+     * Va en todas las pantallas para que siempre esté a un toque; solo la pantalla de Ajustes la quita,
+     * porque ya tiene la versión grande.
+     */
+    accesibilidad?: boolean;
 };
 
-/** Encabezado de las pantallas con sesión: botón para volver (opcional), ícono, título y subtítulo. */
-export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerrarSesion }: Props) {
+/** Encabezado de las pantallas con sesión: botón para volver, ícono, título, subtítulo y la barra de accesibilidad. */
+export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerrarSesion, accesibilidad = true }: Props) {
     const { colores } = useAccesibilidad();
 
     return (
@@ -84,6 +91,8 @@ export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerra
                     ) : null}
                 </View>
             </View>
+
+            {accesibilidad && <BarraAccesibilidad compacta />}
         </View>
     );
 }

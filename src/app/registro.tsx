@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View, type TextInput } from 'react-native';
 
 import { Aviso } from '@/components/vita/aviso';
 import { Boton } from '@/components/vita/boton';
-import { Campo } from '@/components/vita/campo';
+import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { ChipSeleccion } from '@/components/vita/chip-seleccion';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { Icono, type NombreIcono } from '@/components/vita/icono';
@@ -28,12 +28,13 @@ const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIco
 
 const TITULO_CONTACTO = 'Contacto de emergencia';
 const EXPLICACION_CONTACTO =
-    'Es opcional. Es la persona a quien avisaremos si pides ayuda de emergencia. ' +
-    'Si lo agregas, el nombre y el teléfono son obligatorios.';
+    'Persona a quien avisaremos si solicitas ayuda de emergencia. Puedes registrarla ahora o más adelante; ' +
+    'si la agregas, el nombre y el teléfono son obligatorios.';
 
 const PREGUNTA_DISCAPACIDAD = '¿Tienes alguna discapacidad?';
 const EXPLICACION_DISCAPACIDAD =
-    'Es opcional. Nos ayuda a adaptar VITA para ti: tamaño de letra, contraste, avisos por voz y más.';
+    'Esta información nos permite adaptar VITA a tus necesidades: tamaño de letra, contraste, avisos por voz y más. ' +
+    'Puedes omitir este paso.';
 
 /** Convierte cualquier error en un mensaje entendible para el usuario. */
 function mensajeDeError(e: unknown): string {
@@ -51,9 +52,8 @@ function validar(d: Pick<UsuarioRequest, 'nombre' | 'cedula' | 'correo' | 'contr
     const errores: Errores = {};
     if (!d.nombre.trim()) errores.nombre = 'Escribe tu nombre completo';
     if (!d.cedula.trim()) errores.cedula = 'Escribe tu número de cédula';
-    else if (!/^\d{5,12}$/.test(d.cedula.trim())) errores.cedula = 'La cédula debe tener solo números';
     if (!d.correo.trim()) errores.correo = 'Escribe tu correo';
-    else if (!/^\S+@\S+\.\S+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
+    else if (!/^[^\s@]+@[^\s@]+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
     if (d.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres';
     return errores;
 }
@@ -65,7 +65,6 @@ function validarContacto(c: ContactoEmergenciaRequest): Errores {
     if (!seLleno) return errores;
     if (!c.nombre.trim()) errores.contactoNombre = 'Escribe el nombre de tu contacto';
     if (!c.telefono.trim()) errores.contactoTelefono = 'Escribe el teléfono de tu contacto';
-    else if (!/^\d{7,15}$/.test(c.telefono.trim())) errores.contactoTelefono = 'El teléfono debe tener solo números (mínimo 7)';
     return errores;
 }
 
@@ -96,7 +95,7 @@ export default function RegistroScreen() {
             actuales.includes(tipo) ? actuales.filter((t) => t !== tipo) : [...actuales, tipo],
         );
         // Con modo voz, confirma qué opción se tocó y cómo quedó
-        leer(`Discapacidad ${titulo.toLowerCase()}, ${quedaSeleccionada ? 'seleccionada' : 'quitada'}. Es opcional.`);
+        leer(`Discapacidad ${titulo.toLowerCase()}, ${quedaSeleccionada ? 'seleccionada' : 'quitada'}.`);
     };
 
     const volver = () => (router.canGoBack() ? router.back() : router.replace('/login'));
@@ -320,6 +319,7 @@ export default function RegistroScreen() {
 
                     <Campo
                         etiqueta="Nombre completo"
+                        obligatorio
                         icono="persona"
                         placeholder="Ej: María Gómez"
                         value={nombre}
@@ -334,19 +334,19 @@ export default function RegistroScreen() {
                     <Campo
                         ref={cedulaRef}
                         etiqueta="Cédula"
+                        obligatorio
                         icono="cedula"
-                        placeholder="Solo números"
+                        placeholder="Ej: 1094123456"
                         value={cedula}
-                        onChangeText={(texto) => setCedula(texto.replace(/\D/g, ''))}
+                        onChangeText={setCedula}
                         error={errores.cedula}
-                        keyboardType="number-pad"
-                        maxLength={12}
                         returnKeyType="next"
                         onSubmitEditing={() => correoRef.current?.focus()}
                     />
                     <Campo
                         ref={correoRef}
                         etiqueta="Correo electrónico"
+                        obligatorio
                         icono="correo"
                         placeholder="tucorreo@ejemplo.com"
                         ayuda="Lo usarás para iniciar sesión"
@@ -363,6 +363,7 @@ export default function RegistroScreen() {
                     <Campo
                         ref={contrasenaRef}
                         etiqueta="Contraseña"
+                        obligatorio
                         icono="candado"
                         placeholder="Crea una contraseña"
                         ayuda="Mínimo 8 caracteres"
@@ -410,17 +411,16 @@ export default function RegistroScreen() {
                         icono="telefono"
                         placeholder="Ej: 3001234567"
                         value={contactoTelefono}
-                        onChangeText={(texto) => setContactoTelefono(texto.replace(/\D/g, ''))}
+                        onChangeText={setContactoTelefono}
                         error={errores.contactoTelefono}
                         keyboardType="phone-pad"
                         textContentType="telephoneNumber"
-                        maxLength={15}
                         returnKeyType="next"
                         onSubmitEditing={() => contactoParentescoRef.current?.focus()}
                     />
                     <Campo
                         ref={contactoParentescoRef}
-                        etiqueta="Parentesco (opcional)"
+                        etiqueta="Parentesco"
                         icono="parentesco"
                         placeholder="Ej: Mamá, hermano, pareja"
                         ayuda="Qué relación tiene contigo"
@@ -456,6 +456,7 @@ export default function RegistroScreen() {
                     </View>
                 </View>
 
+                <NotaCamposObligatorios />
                 <Boton titulo="Crear cuenta" icono="check" onPress={enviar} cargando={cargando} />
                 {errorGeneral && <Aviso mensaje={errorGeneral} />}
             </View>

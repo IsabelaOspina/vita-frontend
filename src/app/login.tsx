@@ -30,7 +30,7 @@ type Errores = { correo?: string; contrasena?: string };
 function validar(correo: string, contrasena: string): Errores {
     const errores: Errores = {};
     if (!correo.trim()) errores.correo = 'Escribe tu correo';
-    else if (!/^\S+@\S+\.\S+$/.test(correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
+    else if (!/^[^\s@]+@[^\s@]+$/.test(correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
     if (!contrasena) errores.contrasena = 'Escribe tu contraseña';
     return errores;
 }
@@ -81,6 +81,7 @@ export default function LoginScreen() {
             router.replace(rutaDeInicio(respuesta.usuario.rol));
         } catch (e) {
             const mensaje = mensajeDeError(e);
+            // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
             const campo = campoDelError<keyof Errores>(mensaje, [
                 [/inactivo/i, 'correo'],
                 [/contrase/i, 'contrasena'],

@@ -7,7 +7,7 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import type { SintomaResponse } from '@/dto/SintomaResponse';
 import { fechaHoraCorta, fechaHoraLarga } from '@/utils/fechas';
-import type { FuenteSintomas } from '@/utils/fuente-sintomas';
+import { dejarAvisoPendiente, type FuenteSintomas } from '@/utils/fuente-sintomas';
 import { mensajeDeError } from '@/utils/sesion';
 import { nombreNivel } from '@/utils/sintomas';
 
@@ -76,7 +76,10 @@ export function PantallaDetalleSintoma({ fuente, id }: Props) {
             await fuente.eliminar(sintoma.id);
             const mensaje = `Se eliminó el síntoma ${sintoma.tipo.toLowerCase()}, ${fechaHoraCorta(sintoma.fechaHora).toLowerCase()}`.replace(/\.?$/, '.');
             anunciar(mensaje);
-            router.dismissTo({ pathname: '/paciente/sintomas', params: { aviso: mensaje } });
+            // Vuelve a la pantalla de donde vino (Mis síntomas o el historial), que muestra el aviso
+            dejarAvisoPendiente(mensaje);
+            if (router.canGoBack()) router.back();
+            else router.replace(fuente.rutas.lista);
         } catch (e) {
             const mensaje = mensajeDeError(e, 'No pudimos eliminar el síntoma.');
             setErrorEliminar(mensaje);

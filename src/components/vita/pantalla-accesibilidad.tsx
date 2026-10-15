@@ -58,6 +58,7 @@ export function PantallaAccesibilidad({ rol }: { rol: Rol }) {
     return (
         <FondoPantalla>
             <Encabezado
+                accesibilidad={false}
                 alCerrarSesion={() => salir(anunciar)}
                 icono="ajustes"
                 titulo="Accesibilidad"
