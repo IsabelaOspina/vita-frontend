@@ -48,6 +48,11 @@ export type PantallaVoz = {
     titulo?: string;
     /** Lo que se lee con "leer pantalla" o "dónde estoy". */
     descripcion: string;
+    /**
+     * Mientras sea true, la pantalla todavía está trayendo sus datos: al entrar con el modo voz,
+     * la descripción se lee cuando termine de cargar (así no se dice "tienes 0" antes de tiempo).
+     */
+    cargando?: boolean;
     /** Ejemplos de órdenes para esta pantalla, que se leen con "ayuda". */
     ejemplos: string[];
     campos: CampoVoz[];
@@ -164,6 +169,11 @@ export function aPalabras(texto: string): string {
 
 function contieneAlguna(texto: string, frases: string[]): boolean {
     return frases.some((frase) => new RegExp(`(^|\\s)${frase}($|\\s)`).test(texto));
+}
+
+/** Largo de la frase más larga de la lista que aparece en el texto (0 si ninguna aparece). */
+function coincidenciaMasLarga(texto: string, frases: string[]): number {
+    return frases.reduce((max, frase) => (frase.length > max && contieneAlguna(texto, [frase]) ? frase.length : max), 0);
 }
 
 /** Cuántas letras hay que cambiar para pasar de una palabra a otra (distancia de Levenshtein). */
@@ -522,6 +532,12 @@ export function interpretar(orden: string, pantalla: PantallaVoz | null): Result
     // 3. Acciones sobre un elemento de una lista: "desactiva a Ana Gómez", "ver el número 2"
     const sobreElemento = interpretarElemento(palabras, pantalla);
     if (sobreElemento?.tipo === 'accionElemento') return sobreElemento;
+
+    // 3a. Leer una lista cuando la frase la nombra con más detalle que cualquier acción:
+    // "lee mis medicamentos" lee las tomas de hoy en vez de ir a "medicamentos"
+    const largoAccion = Math.max(0, ...pantalla.acciones.map((a) => coincidenciaMasLarga(palabras, a.frases)));
+    const listaPrecisa = (pantalla.listas ?? []).find((l) => coincidenciaMasLarga(palabras, l.claves) > largoAccion);
+    if (listaPrecisa) return { tipo: 'leerLista', lista: listaPrecisa };
 
     // 3b. Acciones de la pantalla ("cerrar sesión", "registrar profesional"…)
     const accionPantalla = pantalla.acciones.findIndex((a) => contieneAlguna(palabras, a.frases));

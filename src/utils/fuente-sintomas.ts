@@ -62,12 +62,12 @@ export const fuentePaciente: FuenteSintomas = {
     tipos: async () => (await obtenerTiposSintoma()).map((t) => t.tipo),
     eliminar: eliminarSintoma,
     rutas: {
-        lista: '/paciente/sintomas',
-        detalle: (id) => ({ pathname: '/paciente/sintomas/[id]', params: { id: String(id) } }),
-        historial: (filtros) => ({ pathname: '/paciente/sintomas/historial', params: filtros ?? {} }),
-        evolucion: '/paciente/sintomas/evolucion',
-        nuevo: '/paciente/sintomas/nuevo',
-        editar: (id) => ({ pathname: '/paciente/sintomas/editar/[id]', params: { id: String(id) } }),
+        lista: '/paciente/salud/sintomas',
+        detalle: (id) => ({ pathname: '/paciente/salud/sintomas/[id]', params: { id: String(id) } }),
+        historial: (filtros) => ({ pathname: '/paciente/salud/sintomas/historial', params: filtros ?? {} }),
+        evolucion: '/paciente/salud/sintomas/evolucion',
+        nuevo: '/paciente/salud/sintomas/nuevo',
+        editar: (id) => ({ pathname: '/paciente/salud/sintomas/editar/[id]', params: { id: String(id) } }),
     },
 };
 
