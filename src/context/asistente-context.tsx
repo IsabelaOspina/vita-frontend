@@ -372,9 +372,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     const ejemplos = pantalla?.ejemplos ?? [];
                     hablar(
                         (ejemplos.length ? `Aquí puedes decir: ${ejemplos.join('. ')}. ` : '') +
-                        'Puedes decir varias cosas seguidas, unidas con "y". ' +
-                        'También: qué falta, deletrea la contraseña, borra el correo, repite, ' +
-                        'habla más rápido o más despacio, alto contraste, aumenta el texto, o desactiva el modo voz.',
+                            'Puedes decir varias cosas seguidas, unidas con "y". ' +
+                            'También: qué falta, deletrea la contraseña, borra el correo, repite, ' +
+                            'habla más rápido o más despacio, alto contraste, aumenta el texto, o desactiva el modo voz.',
                     );
                     break;
                 }
@@ -470,9 +470,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     const cantidad = lista.elementos.length;
                     hablar(
                         `${lista.nombre}: ${cantidad === 1 ? 'hay uno' : `hay ${cantidad}`}. ` +
-                        lista.elementos
-                            .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`.replace(/\.$/, ''))
-                            .join('. ') + '.',
+                            lista.elementos
+                                .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`.replace(/\.$/, ''))
+                                .join('. ') + '.',
                     );
                     break;
                 }
@@ -937,11 +937,30 @@ export function useComandosPantalla(pantalla: PantallaVoz) {
     const modoVozRef = useRef(modoVoz);
     modoVozRef.current = modoVoz;
 
+    // Si la pantalla está cargando al entrar, la lectura se deja pendiente hasta que termine
+    const enfocadaRef = useRef(false);
+    const leerAlCargarRef = useRef(false);
+
     useFocusEffect(
         useCallback(() => {
-            registrarPantalla(ref, modoVozRef.current);
-            return () => quitarPantalla(ref);
+            enfocadaRef.current = true;
+            const esperar = !!ref.current.cargando && modoVozRef.current;
+            leerAlCargarRef.current = esperar;
+            registrarPantalla(ref, esperar ? false : modoVozRef.current);
+            return () => {
+                enfocadaRef.current = false;
+                leerAlCargarRef.current = false;
+                quitarPantalla(ref);
+            };
             // eslint-disable-next-line react-hooks/exhaustive-deps
         }, []),
     );
+
+    const cargando = !!pantalla.cargando;
+    useEffect(() => {
+        if (cargando || !leerAlCargarRef.current || !enfocadaRef.current) return;
+        leerAlCargarRef.current = false;
+        registrarPantalla(ref, modoVozRef.current);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cargando]);
 }

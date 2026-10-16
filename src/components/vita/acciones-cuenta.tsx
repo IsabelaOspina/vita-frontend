@@ -17,15 +17,35 @@ export function salir(anunciar: (mensaje: string) => void) {
 export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void): AccionVoz[] {
     const rutas = rutasDe(rol);
     return [
-        // Solo el paciente tiene la pestaña "Síntomas"
+        // Solo el paciente tiene "Mi salud": agenda, medicamentos y síntomas
         ...(rol === 'USUARIO'
             ? [
-                {
-                    frases: ['ve a sintomas', 'ir a sintomas', 'abre sintomas', 've a mis sintomas', 'ir a mis sintomas', 'abre mis sintomas', 'pestana sintomas'],
-                    etiqueta: 'ir a mis síntomas',
-                    ejecutar: () => router.navigate('/paciente/sintomas'),
-                },
-            ]
+                  {
+                      frases: ['ve a mi salud', 'ir a mi salud', 'abre mi salud', 'mi salud', 'pestana mi salud'],
+                      etiqueta: 'ir a mi salud',
+                      ejecutar: () => router.navigate('/paciente/salud'),
+                  },
+                  {
+                      frases: ['que tengo hoy', 'que hay hoy', 'lo de hoy', 'ver lo de hoy', 'mis pendientes de hoy', 've a hoy'],
+                      etiqueta: 'ver lo de hoy',
+                      ejecutar: () => router.navigate('/paciente/salud/hoy'),
+                  },
+                  {
+                      frases: ['ve a la agenda', 'ir a la agenda', 'abre la agenda', 'mi agenda', 'agenda', 'mis citas', 'calendario', 'mi calendario'],
+                      etiqueta: 'ir a la agenda',
+                      ejecutar: () => router.navigate('/paciente/salud/agenda'),
+                  },
+                  {
+                      frases: ['ve a medicamentos', 'ir a medicamentos', 'abre medicamentos', 'mis medicamentos', 'medicamentos', 'mis medicinas', 'medicinas'],
+                      etiqueta: 'ir a mis medicamentos',
+                      ejecutar: () => router.navigate('/paciente/salud/medicamentos'),
+                  },
+                  {
+                      frases: ['ve a sintomas', 'ir a sintomas', 'abre sintomas', 've a mis sintomas', 'ir a mis sintomas', 'abre mis sintomas'],
+                      etiqueta: 'ir a mis síntomas',
+                      ejecutar: () => router.navigate('/paciente/salud/sintomas'),
+                  },
+              ]
             : []),
         {
             frases: ['ve a mi cuenta', 'ir a mi cuenta', 'abre mi cuenta', 'mi cuenta', 'mis datos', 'mi perfil', 'mi informacion'],

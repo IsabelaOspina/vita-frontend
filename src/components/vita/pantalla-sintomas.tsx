@@ -137,7 +137,7 @@ export function PantallaSintomas({ fuente, titulo, subtitulo, icono, nombrePacie
         if (partes.tipo) params.tipo = partes.tipo;
         if (partes.intensidad) params.intensidad = String(partes.intensidad);
         if (partes.cuando) params.cuando = partes.cuando;
-        return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => router.push({ pathname: '/paciente/sintomas/nuevo', params }) } }];
+        return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => router.push({ pathname: '/paciente/salud/sintomas/nuevo', params }) } }];
     };
 
     useComandosPantalla({
@@ -170,11 +170,11 @@ export function PantallaSintomas({ fuente, titulo, subtitulo, icono, nombrePacie
                     },
                     ...(fuente.editable && fuente.rutas.editar
                         ? [
-                            {
-                                frases: ['edita', 'editar', 'cambia', 'cambiar', 'modifica', 'modificar', 'corrige', 'corregir'],
-                                ejecutar: (i: number) => router.push(fuente.rutas.editar!(recientes[i].id)),
-                            },
-                        ]
+                              {
+                                  frases: ['edita', 'editar', 'cambia', 'cambiar', 'modifica', 'modificar', 'corrige', 'corregir'],
+                                  ejecutar: (i: number) => router.push(fuente.rutas.editar!(recientes[i].id)),
+                              },
+                          ]
                         : []),
                 ],
             },
@@ -182,12 +182,12 @@ export function PantallaSintomas({ fuente, titulo, subtitulo, icono, nombrePacie
         acciones: [
             ...(fuente.editable && fuente.rutas.nuevo
                 ? [
-                    {
-                        frases: ['registrar sintoma', 'registrar un sintoma', 'registra un sintoma', 'nuevo sintoma', 'anotar sintoma', 'anotar un sintoma', 'agregar sintoma', 'agregar un sintoma', 'registrar', 'anotar'],
-                        etiqueta: 'registrar un síntoma',
-                        ejecutar: () => router.push(fuente.rutas.nuevo!),
-                    },
-                ]
+                      {
+                          frases: ['registrar sintoma', 'registrar un sintoma', 'registra un sintoma', 'nuevo sintoma', 'anotar sintoma', 'anotar un sintoma', 'agregar sintoma', 'agregar un sintoma', 'registrar', 'anotar'],
+                          etiqueta: 'registrar un síntoma',
+                          ejecutar: () => router.push(fuente.rutas.nuevo!),
+                      },
+                  ]
                 : []),
             { frases: ['lee el resumen', 'resumen', 'como voy', 'como he estado', 'como estoy', 'como esta'], etiqueta: 'leer el resumen', ejecutar: leerResumen },
             {
@@ -204,11 +204,11 @@ export function PantallaSintomas({ fuente, titulo, subtitulo, icono, nombrePacie
             // El profesional solo consulta: si pide modificar, se le explica
             ...(!fuente.editable
                 ? [
-                    {
-                        frases: ['eliminar', 'elimina', 'borrar', 'borra', 'editar', 'edita', 'cambiar', 'cambia', 'modificar', 'registrar', 'registra', 'nuevo sintoma'],
-                        ejecutar: () => anunciar('Solo puedes consultar los síntomas del paciente. Solo el paciente puede registrarlos, editarlos o eliminarlos.'),
-                    },
-                ]
+                      {
+                          frases: ['eliminar', 'elimina', 'borrar', 'borra', 'editar', 'edita', 'cambiar', 'cambia', 'modificar', 'registrar', 'registra', 'nuevo sintoma'],
+                          ejecutar: () => anunciar('Solo puedes consultar los síntomas del paciente. Solo el paciente puede registrarlos, editarlos o eliminarlos.'),
+                      },
+                  ]
                 : []),
             ...(alVolver ? [{ frases: ['volver', 'atras', 'regresar', 'mis pacientes', 've a mis pacientes'], ejecutar: alVolver }] : []),
             ...accionesComunesVoz(fuente.rol, anunciar),

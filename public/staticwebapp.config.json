@@ -6,12 +6,23 @@
     { "route": "/paciente", "rewrite": "/paciente/index.html" },
     { "route": "/paciente/accesibilidad", "rewrite": "/paciente/accesibilidad.html" },
     { "route": "/paciente/mi-cuenta", "rewrite": "/paciente/mi-cuenta.html" },
-    { "route": "/paciente/sintomas", "rewrite": "/paciente/sintomas/index.html" },
-    { "route": "/paciente/sintomas/nuevo", "rewrite": "/paciente/sintomas/nuevo.html" },
-    { "route": "/paciente/sintomas/evolucion", "rewrite": "/paciente/sintomas/evolucion.html" },
-    { "route": "/paciente/sintomas/historial", "rewrite": "/paciente/sintomas/historial.html" },
-    { "route": "/paciente/sintomas/editar/*", "rewrite": "/paciente/sintomas/editar/[id].html" },
-    { "route": "/paciente/sintomas/*", "rewrite": "/paciente/sintomas/[id].html" },
+    { "route": "/paciente/salud", "rewrite": "/paciente/salud/index.html" },
+    { "route": "/paciente/salud/hoy", "rewrite": "/paciente/salud/hoy.html" },
+    { "route": "/paciente/salud/sintomas", "rewrite": "/paciente/salud/sintomas/index.html" },
+    { "route": "/paciente/salud/sintomas/nuevo", "rewrite": "/paciente/salud/sintomas/nuevo.html" },
+    { "route": "/paciente/salud/sintomas/evolucion", "rewrite": "/paciente/salud/sintomas/evolucion.html" },
+    { "route": "/paciente/salud/sintomas/historial", "rewrite": "/paciente/salud/sintomas/historial.html" },
+    { "route": "/paciente/salud/sintomas/editar/*", "rewrite": "/paciente/salud/sintomas/editar/[id].html" },
+    { "route": "/paciente/salud/sintomas/*", "rewrite": "/paciente/salud/sintomas/[id].html" },
+    { "route": "/paciente/salud/agenda", "rewrite": "/paciente/salud/agenda/index.html" },
+    { "route": "/paciente/salud/agenda/nueva", "rewrite": "/paciente/salud/agenda/nueva.html" },
+    { "route": "/paciente/salud/agenda/editar/*", "rewrite": "/paciente/salud/agenda/editar/[id].html" },
+    { "route": "/paciente/salud/agenda/*", "rewrite": "/paciente/salud/agenda/[id].html" },
+    { "route": "/paciente/salud/medicamentos", "rewrite": "/paciente/salud/medicamentos/index.html" },
+    { "route": "/paciente/salud/medicamentos/nuevo", "rewrite": "/paciente/salud/medicamentos/nuevo.html" },
+    { "route": "/paciente/salud/medicamentos/horario", "rewrite": "/paciente/salud/medicamentos/horario.html" },
+    { "route": "/paciente/salud/medicamentos/editar/*", "rewrite": "/paciente/salud/medicamentos/editar/[id].html" },
+    { "route": "/paciente/salud/medicamentos/*", "rewrite": "/paciente/salud/medicamentos/[id].html" },
     { "route": "/personal", "rewrite": "/personal/index.html" },
     { "route": "/personal/accesibilidad", "rewrite": "/personal/accesibilidad.html" },
     { "route": "/personal/mi-cuenta", "rewrite": "/personal/mi-cuenta.html" },
@@ -27,6 +38,10 @@
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/_expo/*", "/assets/*", "/*.{png,jpg,jpeg,gif,svg,ico,css,js,json,ttf,woff,woff2}"]
+    "exclude": [
+      "/_expo/*",
+      "/assets/*",
+      "/*.{png,jpg,jpeg,gif,svg,ico,css,js,json,ttf,woff,woff2}"
+    ]
   }
 }

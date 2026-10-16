@@ -1,5 +1,5 @@
 
-import type { TipoActividad } from "../enums/TipoActividad";
+import type { TipoActividad } from "./TipoActividad";
 
 export interface ActividadSaludRequest {
   nombre: string;

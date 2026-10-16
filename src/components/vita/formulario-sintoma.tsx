@@ -155,7 +155,7 @@ export function FormularioSintoma({ id }: Props) {
     };
     const cambiarObservaciones = cambiar('observaciones', setObservaciones);
 
-    const volver = () => (router.canGoBack() ? router.back() : router.replace('/paciente/sintomas'));
+    const volver = () => (router.canGoBack() ? router.back() : router.replace('/paciente/salud/sintomas'));
 
     // Sugerencias mientras se escribe: con el campo vacío, las más usadas; al escribir, las que contienen
     // lo escrito ("dol" → "Dolor de cabeza", "Dolor de espalda"…). Así se termina de escribir con un toque.
@@ -170,8 +170,8 @@ export function FormularioSintoma({ id }: Props) {
     const ayudaCuando = !cuando.trim()
         ? 'Si no indicas la fecha, se registra con la hora actual.'
         : fechaEntendida
-            ? `Se guardará: ${fechaHoraLarga(aFechaHoraLocal(fechaEntendida))}`
-            : undefined;
+          ? `Se guardará: ${fechaHoraLarga(aFechaHoraLocal(fechaEntendida))}`
+          : undefined;
 
     const guardar = async () => {
         const encontrados = validar({ tipo, intensidad, cuando, observaciones });
@@ -200,7 +200,7 @@ export function FormularioSintoma({ id }: Props) {
                 : `Listo, guardé ${guardado.tipo.toLowerCase()} con intensidad ${guardado.intensidad} de 10.`;
             anunciar(mensaje);
             // Vuelve a la lista (que muestra el aviso y ya trae el síntoma nuevo o editado)
-            router.dismissTo({ pathname: '/paciente/sintomas', params: { aviso: mensaje } });
+            router.dismissTo({ pathname: '/paciente/salud/sintomas', params: { aviso: mensaje } });
         } catch (e) {
             const mensaje = mensajeDeError(e, 'No pudimos guardar el síntoma.');
             // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
@@ -305,13 +305,13 @@ export function FormularioSintoma({ id }: Props) {
         pasosOpcionales: editando
             ? []
             : [
-                {
-                    pregunta: cuando
-                        ? 'Responde sí o no: ¿quieres agregar una observación?'
-                        : 'Responde sí o no: ¿quieres decir cuándo empezó o agregar una observación? Si no, se guarda con la hora de ahora.',
-                    campos: ['Cuándo', 'Observaciones'],
-                },
-            ],
+                  {
+                      pregunta: cuando
+                          ? 'Responde sí o no: ¿quieres agregar una observación?'
+                          : 'Responde sí o no: ¿quieres decir cuándo empezó o agregar una observación? Si no, se guarda con la hora de ahora.',
+                      campos: ['Cuándo', 'Observaciones'],
+                  },
+              ],
         acciones: [
             {
                 frases: ['guardar', 'guarda', 'guardalo', 'guardala', 'guardar sintoma', 'guardar cambios', 'registrar', 'registralo', 'terminar', 'enviar', 'listo'],
@@ -328,17 +328,17 @@ export function FormularioSintoma({ id }: Props) {
 
     const opcionesCuando = editando
         ? [
-            { valor: cuandoOriginal, titulo: 'Como estaba' },
-            { valor: 'ahora', titulo: 'Ahora' },
-            { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
-            { valor: 'ayer', titulo: 'Ayer' },
-        ]
+              { valor: cuandoOriginal, titulo: 'Como estaba' },
+              { valor: 'ahora', titulo: 'Ahora' },
+              { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
+              { valor: 'ayer', titulo: 'Ayer' },
+          ]
         : [
-            { valor: '', titulo: 'Ahora' },
-            { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
-            { valor: 'hace 3 horas', titulo: 'Hace 3 horas' },
-            { valor: 'ayer', titulo: 'Ayer' },
-        ];
+              { valor: '', titulo: 'Ahora' },
+              { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
+              { valor: 'hace 3 horas', titulo: 'Hace 3 horas' },
+              { valor: 'ayer', titulo: 'Ayer' },
+          ];
     const opcionCuando = escribiendoFecha
         ? '__otro'
         : (opcionesCuando.find((o) => o.valor === cuando.trim().toLowerCase())?.valor ?? '__otro');

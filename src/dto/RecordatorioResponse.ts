@@ -1,5 +1,5 @@
-import type { TipoRecordatorio } from "../enums/TipoRecordatorio";
-import type { EstadoRecordatorio } from "../enums/EstadoRecordatorio";
+import type { TipoRecordatorio } from "./TipoRecordatorio";
+import type { EstadoRecordatorio } from "./EstadoRecordatorio";
 
 export interface RecordatorioResponse {
   id: number;

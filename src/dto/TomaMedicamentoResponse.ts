@@ -1,4 +1,4 @@
-import type { EstadoTomaMed } from "../enums/EstadoTomaMed";
+import type { EstadoTomaMed } from "./EstadoTomaMed";
 
 export interface TomaMedicamentoResponse {
   id: number;

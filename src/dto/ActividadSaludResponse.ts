@@ -1,6 +1,6 @@
 
-import type { TipoActividad } from "../enums/TipoActividad";
-import type { EstadoActividad } from "../enums/EstadoActividad";
+import type { TipoActividad } from "./TipoActividad";
+import type { EstadoActividad } from "./EstadoActividad";
 
 export interface ActividadSaludResponse {
   id: number;

@@ -1,5 +1,5 @@
-import type { TipoFrecuenciaMedicamento } from "../enums/TipoFrecuenciaMedicamento";
-import type { TipoRecordatorio } from "../enums/TipoRecordatorio";
+import type { TipoFrecuenciaMedicamento } from "./TipoFrecuenciaMedicamento";
+import type { TipoRecordatorio } from "./TipoRecordatorio";
 
 export interface HorarioMedicamentoResponse {
   id: number;

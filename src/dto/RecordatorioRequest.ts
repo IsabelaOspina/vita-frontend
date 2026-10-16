@@ -1,4 +1,4 @@
-import type { TipoRecordatorio } from "../enums/TipoRecordatorio";
+import type { TipoRecordatorio } from "./TipoRecordatorio";
 
 export interface RecordatorioRequest {
   fechaHora: string;

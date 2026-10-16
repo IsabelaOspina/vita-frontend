@@ -2,12 +2,12 @@ import { Tabs } from 'expo-router/tabs';
 
 import { pestana, Pestanas } from '@/components/vita/pestanas';
 
-/** Pestañas del paciente (rol USUARIO). */
+/** Pestañas del paciente (rol USUARIO). Agenda, medicamentos y síntomas están dentro de "Mi salud". */
 export default function PacienteLayout() {
     return (
         <Pestanas>
             <Tabs.Screen name="index" options={pestana('Inicio', 'casa')} />
-            <Tabs.Screen name="sintomas" options={pestana('Síntomas', 'sintomas', 'Mis síntomas')} />
+            <Tabs.Screen name="salud" options={pestana('Mi salud', 'salud', 'Mi salud: agenda, medicamentos y síntomas')} />
             <Tabs.Screen name="accesibilidad" options={pestana('Ajustes', 'ajustes', 'Ajustes de accesibilidad')} />
             <Tabs.Screen name="mi-cuenta" options={pestana('Mi cuenta', 'persona')} />
         </Pestanas>
