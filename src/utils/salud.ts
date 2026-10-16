@@ -303,4 +303,4 @@ export function unirFechaHora(fecha: Date, hora: { horas: number; minutos: numbe
 export const aTextoFecha = (fecha: Date) => `${dos(fecha.getDate())}/${dos(fecha.getMonth() + 1)}/${fecha.getFullYear()}`;
 
 /** "9:30 a. m." (como se muestra en el campo de hora). */
-export const aTextoHora = (
+export const aTextoHora = (fecha: Date) => horaCorta(fecha);
