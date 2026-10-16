@@ -5,89 +5,67 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
-import type { MedicamentoResponse } from '@/dto/MedicamentoResponse';
-import { listarMedicamentos } from '@/services/medicamentoService';
-import { aPalabras, type Resultado } from '@/utils/comandos-voz';
-import { tomarAvisoPendiente } from '@/utils/fuente-sintomas';
+import { deFechaLocal, horaCorta } from '@/utils/fechas';
 import { mensajeDeError } from '@/utils/sesion';
+import { enumerar, nombreTipoActividad, sinPuntoDoble, tomaPorMarcar } from '@/utils/salud';
 
-import { accionesComunesVoz } from './acciones-cuenta';
-import { Aviso } from './aviso';
+import { accionesComunesVoz, salir } from './acciones-cuenta';
 import { Boton } from './boton';
 import { Encabezado } from './encabezado';
-import { EstadoCarga } from './estado-carga';
 import { FondoPantalla } from './fondo-pantalla';
-import { Icono } from './icono';
+import { Icono, type NombreIcono } from './icono';
+import { datosDeHoy } from './pantalla-hoy';
 import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
 
-/** "Agrega metformina 850 miligramos", "nuevo medicamento losartán". */
-const NUEVO = /^(?:agrega(?:r)?|registra(?:r)?|nuevo medicamento|anota(?:r)?|tomo)\s+(?:el |la |un |una |medicamento )?(.+)$/;
+type Resumen = { tomasPendientes: string[]; actividades: string[]; medicamentosActivos: number };
 
-/** "metformina 850 miligramos" → { nombre: "Metformina", dosis: "850 mg" } */
-export function separarMedicamento(texto: string): { nombre: string; dosis?: string } {
-    const m = /^(.*?)\s+(\d+(?:[.,]\d+)?\s*(?:mg|miligramos?|g|gramos?|ml|mililitros?|mcg|microgramos?|ui|unidades?|gotas?|tabletas?|pastillas?|capsulas?)\b.*)$/i.exec(texto.trim());
-    const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-    if (!m) return { nombre: capital(texto.trim()) };
-    const dosis = m[2]
-        .replace(/miligramos?/i, 'mg')
-        .replace(/mililitros?/i, 'ml')
-        .replace(/microgramos?/i, 'mcg')
-        .replace(/gramos?/i, 'g')
-        .replace(/\s+/g, ' ');
-    return { nombre: capital(m[1]), dosis };
-}
-
-/** Un medicamento de la lista. */
-function ElementoMedicamento({ medicamento, numero, onPress }: { medicamento: MedicamentoResponse; numero: number; onPress: () => void }) {
+/** Un acceso grande del menú. */
+function Acceso({ icono, titulo, detalle, color, fondo, onPress }: { icono: NombreIcono; titulo: string; detalle: string; color: string; fondo: string; onPress: () => void }) {
     const { colores } = useAccesibilidad();
-    const detalle = [medicamento.dosis, medicamento.viaAdministracion, medicamento.frecuencia].filter(Boolean).join(' · ');
     return (
         <Pressable
             onPress={onPress}
             accessibilityRole="button"
-            accessibilityLabel={`${numero}. ${medicamento.nombre}${detalle ? `, ${detalle}` : ''}${medicamento.activo ? '' : ', desactivado'}`}
-            accessibilityHint="Abre el medicamento con sus horarios y tomas"
-            style={({ pressed }) => [
-                styles.medicamento,
-                { borderColor: colores.borde, backgroundColor: pressed ? colores.superficieSuave : colores.superficie, opacity: medicamento.activo ? 1 : 0.7 },
-            ]}>
-            <View style={[styles.icono, { backgroundColor: medicamento.activo ? colores.exitoFondo : colores.superficieSuave }]}>
-                <Icono nombre="medicamento" tamano={26} color={medicamento.activo ? colores.exito : colores.textoSecundario} />
+            accessibilityLabel={`${titulo}. ${detalle}`}
+            style={({ pressed }) => [styles.acceso, { backgroundColor: pressed ? colores.superficieSuave : colores.superficie, borderColor: colores.borde }]}>
+            <View style={[styles.iconoAcceso, { backgroundColor: fondo }]}>
+                <Icono nombre={icono} tamano={28} color={color} />
             </View>
             <View style={styles.textos}>
-                <Texto variante="cuerpo" peso="700">
-                    {medicamento.nombre}
+                <Texto variante="subtitulo" peso="800">
+                    {titulo}
                 </Texto>
-                {detalle ? (
-                    <Texto variante="pequeno" color="textoSecundario">
-                        {detalle}
-                    </Texto>
-                ) : null}
+                <Texto variante="pequeno" color="textoSecundario">
+                    {detalle}
+                </Texto>
             </View>
-            <Icono nombre="siguiente" tamano={22} color={colores.textoTenue} />
+            <Icono nombre="siguiente" tamano={24} color={colores.textoTenue} />
         </Pressable>
     );
 }
 
-/** Lista de medicamentos: los activos y, aparte, los desactivados. */
-export function PantallaMedicamentos() {
-    const { anunciar } = useAccesibilidad();
-    const [medicamentos, setMedicamentos] = useState<MedicamentoResponse[]>([]);
-    const [cargando, setCargando] = useState(true);
+/**
+ * Pestaña "Mi salud": resumen de hoy y tres accesos grandes (Agenda, Medicamentos y Síntomas).
+ */
+export function PantallaMiSalud() {
+    const { anunciar, colores } = useAccesibilidad();
+    const [resumen, setResumen] = useState<Resumen | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [verDesactivados, setVerDesactivados] = useState(false);
-    const [aviso, setAviso] = useState<string | null>(null);
 
     const cargar = useCallback(async () => {
-        setCargando(true);
         setError(null);
         try {
-            setMedicamentos((await listarMedicamentos()).sort((a, b) => a.nombre.localeCompare(b.nombre)));
+            const datos = await datosDeHoy();
+            setResumen({
+                tomasPendientes: datos.tomas.filter(tomaPorMarcar).map((t) => `${t.medicamentoNombre} a las ${horaCorta(deFechaLocal(t.fechaHora))}`),
+                actividades: datos.actividades
+                    .filter((a) => a.estado === 'PENDIENTE')
+                    .map((a) => `${nombreTipoActividad(a.tipo).toLowerCase()} a las ${horaCorta(deFechaLocal(a.fechaHora))}`),
+                medicamentosActivos: datos.medicamentosActivos,
+            });
         } catch (e) {
-            setError(mensajeDeError(e, 'No pudimos cargar tus medicamentos.'));
-        } finally {
-            setCargando(false);
+            setError(mensajeDeError(e, 'No pudimos cargar el resumen de hoy.'));
         }
     }, []);
 
@@ -95,137 +73,101 @@ export function PantallaMedicamentos() {
     cargarRef.current = cargar;
     useFocusEffect(
         useCallback(() => {
-            const pendiente = tomarAvisoPendiente();
-            if (pendiente) setAviso(pendiente);
             void cargarRef.current();
         }, []),
     );
 
-    const activos = medicamentos.filter((m) => m.activo);
-    const desactivados = medicamentos.filter((m) => !m.activo);
-    const abrir = (m: MedicamentoResponse) => router.push({ pathname: '/paciente/salud/medicamentos/[id]', params: { id: String(m.id) } });
-    const nuevo = (params?: Record<string, string>) => router.push({ pathname: '/paciente/salud/medicamentos/nuevo', params: params ?? {} });
-
-    const dictado = (texto: string): Resultado[] | null => {
-        const pedido = NUEVO.exec(aPalabras(texto));
-        if (!pedido || /^(un )?medicamento$/.test(pedido[1])) return null;
-        const { nombre, dosis } = separarMedicamento(pedido[1]);
-        return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => nuevo({ nombre, ...(dosis ? { dosis } : {}) }) } }];
-    };
+    const fraseHoy = !resumen
+        ? error ?? 'Cargando lo de hoy…'
+        : resumen.tomasPendientes.length === 0 && resumen.actividades.length === 0
+            ? 'Hoy no tienes tomas ni actividades pendientes.'
+            : [
+            resumen.tomasPendientes.length
+                ? `Te ${resumen.tomasPendientes.length === 1 ? 'falta 1 toma' : `faltan ${resumen.tomasPendientes.length} tomas`}: ${enumerar(resumen.tomasPendientes)}`
+                : 'No te faltan tomas',
+            resumen.actividades.length ? `Tienes ${enumerar(resumen.actividades)}` : 'No tienes actividades pendientes',
+        ].join('. ') + '.';
+    const fraseHoyLimpia = sinPuntoDoble(fraseHoy);
 
     useComandosPantalla({
-        cargando: cargando,
-        titulo: 'Medicamentos',
-        descripcion: `Medicamentos. Tienes ${activos.length === 1 ? '1 activo' : `${activos.length} activos`}. Puedes decir: lee la lista, abre y el nombre, o agrega metformina 850 miligramos.`,
-        ejemplos: ['lee la lista', 'abre el losartán', 'agrega metformina 850 miligramos', 'nuevo medicamento'],
+        cargando: !resumen && !error,
+        titulo: 'Mi salud',
+        descripcion: `Mi salud. ${fraseHoyLimpia} Puedes decir: qué tengo hoy, agenda, medicamentos o síntomas.`,
+        ejemplos: ['qué tengo hoy', 'agenda', 'medicamentos', 'síntomas'],
         campos: [],
-        listas: [
-            {
-                claves: ['lee la lista', 'mis medicamentos', 'lista', 'que tomo', 'que medicamentos tengo'],
-                nombre: 'Tus medicamentos',
-                vacia: 'Todavía no has registrado medicamentos.',
-                elementos: activos.map((m) => ({ nombre: m.nombre, detalle: [m.dosis, m.viaAdministracion].filter(Boolean).join(', ') || undefined })),
-                acciones: [{ frases: ['abre', 'abrir', 'ver', 'muestra', 'detalle de'], ejecutar: (i) => abrir(activos[i]) }],
-            },
-            {
-                claves: ['desactivados', 'lee los desactivados', 'medicamentos desactivados'],
-                nombre: 'Medicamentos desactivados',
-                vacia: 'No tienes medicamentos desactivados.',
-                elementos: desactivados.map((m) => ({ nombre: m.nombre })),
-                acciones: [{ frases: ['abre', 'abrir', 'ver'], ejecutar: (i) => abrir(desactivados[i]) }],
-            },
-        ],
         acciones: [
-            { frases: ['nuevo medicamento', 'agregar medicamento', 'registrar medicamento', 'agrega un medicamento'], etiqueta: 'registrar un medicamento', ejecutar: () => nuevo() },
-            { frases: ['volver', 'atras', 'regresar'], ejecutar: () => (router.canGoBack() ? router.back() : router.replace('/paciente/salud')) },
+            { frases: ['lee el resumen', 'resumen', 'como voy hoy'], etiqueta: 'leer el resumen de hoy', ejecutar: () => anunciar(fraseHoyLimpia) },
             ...accionesComunesVoz('USUARIO', anunciar),
         ],
-        dictado,
     });
 
     return (
         <FondoPantalla>
-            <Encabezado volver alVolver={() => router.replace('/paciente/salud')} icono="medicamento" titulo="Medicamentos" subtitulo="Tus medicamentos, sus horarios y tomas" />
+            <Encabezado alCerrarSesion={() => salir(anunciar)} icono="salud" titulo="Mi salud" subtitulo="Agenda, medicamentos y síntomas" />
 
-            {aviso && (
-                <View style={styles.espacio}>
-                    <Aviso tipo="exito" mensaje={aviso} />
-                </View>
-            )}
-
-            <View style={styles.espacio}>
-                <Boton titulo="Nuevo medicamento" icono="agregar" onPress={() => nuevo()} />
-            </View>
-
-            <Tarjeta
-                titulo="Activos"
-                icono="medicamento"
-                extra={
-                    activos.length > 0 ? (
-                        <Texto variante="subtitulo" color="primario" accessibilityLabel={`${activos.length} activos`}>
-                            {activos.length}
-                        </Texto>
-                    ) : null
-                }>
-                <EstadoCarga
-                    cargando={cargando && medicamentos.length === 0}
-                    error={error}
-                    reintentar={cargar}
-                    hayDatos={activos.length > 0}
-                    vacio="Todavía no has registrado medicamentos. Toca «Nuevo medicamento» para agregar el primero."
-                />
-                <View style={styles.lista}>
-                    {activos.map((m, i) => (
-                        <ElementoMedicamento key={m.id} medicamento={m} numero={i + 1} onPress={() => abrir(m)} />
-                    ))}
-                </View>
+            <Tarjeta titulo="Hoy" icono="hoy">
+                <Texto variante="cuerpo" color={error ? 'error' : 'textoSecundario'} accessibilityLiveRegion="polite">
+                    {fraseHoyLimpia}
+                </Texto>
+                <Boton titulo="Ver lo de hoy" icono="siguiente" onPress={() => router.push('/paciente/salud/hoy')} />
             </Tarjeta>
 
-            {desactivados.length > 0 && (
-                <Tarjeta titulo="Desactivados" icono="cancelar">
-                    <Boton
-                        titulo={verDesactivados ? 'Ocultar desactivados' : `Ver desactivados (${desactivados.length})`}
-                        variante="secundario"
-                        onPress={() => setVerDesactivados((v) => !v)}
-                    />
-                    {verDesactivados && (
-                        <View style={styles.lista}>
-                            {desactivados.map((m, i) => (
-                                <ElementoMedicamento key={m.id} medicamento={m} numero={i + 1} onPress={() => abrir(m)} />
-                            ))}
-                        </View>
-                    )}
-                </Tarjeta>
-            )}
+            <View style={styles.accesos}>
+                <Acceso
+                    icono="calendario"
+                    titulo="Agenda"
+                    detalle="Citas, terapias y recordatorios"
+                    color={colores.calendario.icono}
+                    fondo={colores.calendario.fondo}
+                    onPress={() => router.push('/paciente/salud/agenda')}
+                />
+                <Acceso
+                    icono="medicamento"
+                    titulo="Medicamentos"
+                    detalle={
+                        resumen
+                            ? `${resumen.medicamentosActivos === 1 ? '1 activo' : `${resumen.medicamentosActivos} activos`} · horarios y tomas`
+                            : 'Horarios y tomas'
+                    }
+                    color={colores.exito}
+                    fondo={colores.exitoFondo}
+                    onPress={() => router.push('/paciente/salud/medicamentos')}
+                />
+                <Acceso
+                    icono="sintomas"
+                    titulo="Síntomas"
+                    detalle="Registro, historial y evolución"
+                    color={colores.sintomas.icono}
+                    fondo={colores.sintomas.fondo}
+                    onPress={() => router.push('/paciente/salud/sintomas')}
+                />
+            </View>
         </FondoPantalla>
     );
 }
 
 const styles = StyleSheet.create({
-    espacio: {
-        marginBottom: Espacio.l,
+    accesos: {
+        gap: Espacio.m,
     },
-    lista: {
-        gap: Espacio.s,
-    },
-    medicamento: {
+    acceso: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Espacio.m,
-        padding: Espacio.m,
+        padding: Espacio.l,
+        borderRadius: Radio.l,
         borderWidth: 1.5,
-        borderRadius: Radio.m,
+        minHeight: 88,
     },
-    icono: {
-        width: 48,
-        height: 48,
-        borderRadius: Radio.s,
+    iconoAcceso: {
+        width: 56,
+        height: 56,
+        borderRadius: Radio.m,
         alignItems: 'center',
         justifyContent: 'center',
     },
     textos: {
         flex: 1,
-        minWidth: 0,
         gap: 2,
     },
 });
