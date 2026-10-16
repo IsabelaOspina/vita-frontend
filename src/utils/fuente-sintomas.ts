@@ -48,6 +48,8 @@ export type FuenteSintomas = {
         evolucion: Href;
         nuevo?: Href;
         editar?: (id: number) => Href;
+        /** Solo el profesional: escribir una recomendación al paciente (opcionalmente sobre un síntoma). */
+        recomendar?: (sintomaId?: number) => Href;
     };
 };
 
@@ -91,6 +93,10 @@ export function fuenteProfesional(pacienteId: number, nombre: string): FuenteSin
             detalle: (id) => ({ pathname: '/personal/paciente/sintoma', params: { ...params, sintoma: String(id) } }),
             historial: (filtros) => ({ pathname: '/personal/paciente/historial', params: { ...params, ...filtros } }),
             evolucion: { pathname: '/personal/paciente/evolucion', params },
+            recomendar: (sintomaId) => ({
+                pathname: '/personal/paciente/recomendaciones',
+                params: sintomaId ? { ...params, sintoma: String(sintomaId) } : params,
+            }),
         },
     };
 }

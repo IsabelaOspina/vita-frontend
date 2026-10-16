@@ -32,6 +32,7 @@ function Navegacion() {
                 <Stack.Screen name="index" />
                 <Stack.Screen name="login" />
                 <Stack.Screen name="registro" />
+                <Stack.Screen name="recuperar-contrasena" />
                 {/* Cada rol tiene sus pestañas abajo (ver los _layout de paciente, personal y admin) */}
                 <Stack.Screen name="paciente" />
                 <Stack.Screen name="personal" />

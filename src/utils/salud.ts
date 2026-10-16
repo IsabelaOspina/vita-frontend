@@ -56,6 +56,21 @@ export function nombreEstadoToma(estado: EstadoTomaMed): string {
 export const tomaPorMarcar = (toma: TomaMedicamentoResponse) =>
     toma.estado === EstadoTomaMed.PENDIENTE || toma.estado === EstadoTomaMed.NOTIFICADO;
 
+/** Una toma pendiente se sigue mostrando hasta 1 hora después, para poder marcar "Ya lo tomé" si se tomó con algo de retraso. */
+export const MARGEN_TOMA_MS = 60 * 60_000;
+
+/** true si la fecha ya pasó (con un margen opcional en milisegundos). */
+export const yaPaso = (fechaHora: string, margenMs = 0, ahora = Date.now()) => deFechaLocal(fechaHora).getTime() < ahora - margenMs;
+
+/** Tomas de hoy que todavía importan: las que vienen y las pendientes de la última hora. */
+export const tomaVigente = (toma: TomaMedicamentoResponse, ahora = Date.now()) => !yaPaso(toma.fechaHora, MARGEN_TOMA_MS, ahora);
+
+/** Un horario sigue vigente si está activo y su fecha de fin (si tiene) no ha pasado. */
+export const horarioVigente = (h: HorarioMedicamentoResponse, ahora = Date.now()) => h.activo && !(h.fechaHoraFin && yaPaso(h.fechaHoraFin, 0, ahora));
+
+/** Actividades que todavía no han pasado. */
+export const actividadVigente = (actividad: ActividadSaludResponse, ahora = Date.now()) => !yaPaso(actividad.fechaHora, 0, ahora);
+
 export const FRECUENCIAS: { valor: TipoFrecuenciaMedicamento; titulo: string }[] = [
     { valor: TipoFrecuenciaMedicamento.CADA_X_HORAS, titulo: 'Cada X horas' },
     { valor: TipoFrecuenciaMedicamento.DIARIO, titulo: 'Diario' },
@@ -204,6 +219,8 @@ const aNumero = (t?: string) => (t === undefined ? null : /^\d+$/.test(t) ? Numb
  */
 export function interpretarHora(texto: string): { horas: number; minutos: number } | null {
     const t = sinTildes(texto)
+        // "8.30" se entiende como "8:30" (antes de quitar los puntos de "a. m.")
+        .replace(/^(\d{1,2})\.(\d{2})\b/, '$1:$2')
         .replace(/\./g, '')
         .replace(/^(a las?|las?|como a las?|tipo)\s+/, '');
     if (!t) return null;
@@ -216,6 +233,8 @@ export function interpretarHora(texto: string): { horas: number; minutos: number
     const minutos = m[2] === 'media' ? 30 : m[2] === 'cuarto' ? 15 : (aNumero(m[2]) ?? 0);
     if (minutos > 59) return null;
     const momento = m[3];
+    // Con "a. m." o "p. m." la hora va de 1 a 12 ("13:30 p. m." no es una hora válida)
+    if (momento && /^(a ?m|p ?m)$/.test(momento) && (horas < 1 || horas > 12)) return null;
     if (momento && /(tarde|noche|p ?m)/.test(momento)) horas = horas < 12 ? horas + 12 : horas;
     else if (momento && /(manana|madrugada|a ?m)/.test(momento)) horas = horas === 12 ? 0 : horas;
     else if (!momento && horas >= 1 && horas <= 6) horas += 12;
@@ -284,4 +303,4 @@ export function unirFechaHora(fecha: Date, hora: { horas: number; minutos: numbe
 export const aTextoFecha = (fecha: Date) => `${dos(fecha.getDate())}/${dos(fecha.getMonth() + 1)}/${fecha.getFullYear()}`;
 
 /** "9:30 a. m." (como se muestra en el campo de hora). */
-export const aTextoHora = (fecha: Date) => horaCorta(fecha);
+export const aTextoHora = (

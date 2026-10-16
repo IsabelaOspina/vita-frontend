@@ -1,6 +1,6 @@
 import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, type TextInput } from 'react-native';
+import { Pressable, StyleSheet, View, type TextInput } from 'react-native';
 
 import { Aviso } from '@/components/vita/aviso';
 import { BarraAccesibilidad } from '@/components/vita/barra-accesibilidad';
@@ -36,7 +36,7 @@ function validar(correo: string, contrasena: string): Errores {
 }
 
 export default function LoginScreen() {
-    const params = useLocalSearchParams<{ correo?: string; registrado?: string }>();
+    const params = useLocalSearchParams<{ correo?: string; registrado?: string; restablecida?: string }>();
     const { colores, altoContraste, anunciar } = useAccesibilidad();
 
     const [correo, setCorreo] = useState(params.correo ?? '');
@@ -46,17 +46,24 @@ export default function LoginScreen() {
     // El aviso de "cuenta creada" se toma una sola vez del parámetro y luego vive en el estado,
     // para poder quitarlo cuando la persona empieza a escribir o inicia sesión
     const [cuentaCreada, setCuentaCreada] = useState(params.registrado === '1');
+    // Lo mismo al volver de "¿Olvidaste tu contraseña?"
+    const [contrasenaRestablecida, setContrasenaRestablecida] = useState(params.restablecida === '1');
 
     // Se borra el parámetro de la dirección para que el aviso no vuelva a aparecer
     useEffect(() => {
         if (params.registrado) router.setParams({ registrado: undefined });
+        if (params.restablecida) router.setParams({ restablecida: undefined });
         // Solo al abrir la pantalla
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const ocultarAvisoCuentaCreada = () => {
         if (cuentaCreada) setCuentaCreada(false);
+        if (contrasenaRestablecida) setContrasenaRestablecida(false);
     };
+
+    const olvideContrasena = () =>
+        router.push({ pathname: '/recuperar-contrasena', params: correo.trim() ? { correo: correo.trim() } : {} });
     const [cargando, setCargando] = useState(false);
     const contrasenaRef = useRef<TextInput>(null);
 
@@ -65,6 +72,7 @@ export default function LoginScreen() {
         setErrores(encontrados);
         setErrorGeneral(null);
         setCuentaCreada(false);
+        setContrasenaRestablecida(false);
         if (Object.keys(encontrados).length > 0) {
             // Se leen los errores concretos, no solo un aviso general
             anunciar(`Revisa el formulario. ${Object.values(encontrados).join('. ')}`);
@@ -100,12 +108,15 @@ export default function LoginScreen() {
         titulo: 'Inicio de sesión',
         descripcion: cuentaCreada
             ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
-            : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA.',
+            : contrasenaRestablecida
+              ? 'Tu contraseña se actualizó. Ahora inicia sesión con tu correo y la nueva contraseña.'
+              : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA. Si olvidaste tu contraseña, di: olvidé mi contraseña.',
         ejemplos: [
             'mi correo es isabela arroba gmail punto com',
             'mi contraseña es, y la dices',
             'o todo junto: mi correo es …, y mi contraseña es …, e inicia sesión',
             'quiero registrarme',
+            'olvidé mi contraseña',
         ],
         campos: [
             {
@@ -133,6 +144,11 @@ export default function LoginScreen() {
         ],
         acciones: [
             { frases: ['iniciar sesion', 'inicia sesion', 'entrar', 'ingresar'], etiqueta: 'iniciar sesión', ejecutar: enviar },
+            {
+                frases: ['olvide mi contrasena', 'olvide la contrasena', 'recuperar contrasena', 'restablecer contrasena', 'no recuerdo mi contrasena', 'olvide mi clave'],
+                etiqueta: 'recuperar la contraseña',
+                ejecutar: olvideContrasena,
+            },
             {
                 frases: ['registrarme', 'registrar', 'crear cuenta', 'crear una cuenta', 'ir a registro', 'registro'],
                 ejecutar: () => router.push('/registro'),
@@ -165,6 +181,9 @@ export default function LoginScreen() {
                 ]}>
                 {cuentaCreada && (
                     <Aviso tipo="exito" mensaje="¡Tu cuenta fue creada! Ahora inicia sesión." />
+                )}
+                {contrasenaRestablecida && (
+                    <Aviso tipo="exito" mensaje="Tu contraseña se actualizó correctamente. Ya puedes iniciar sesión." />
                 )}
                 <Campo
                     etiqueta="Correo electrónico"
@@ -201,6 +220,16 @@ export default function LoginScreen() {
                     returnKeyType="go"
                     onSubmitEditing={enviar}
                 />
+                <Pressable
+                    onPress={olvideContrasena}
+                    accessibilityRole="link"
+                    accessibilityLabel="¿Olvidaste tu contraseña? Recupérala con un código enviado a tu correo"
+                    hitSlop={8}
+                    style={styles.olvide}>
+                    <Texto variante="etiqueta" color="primario" peso="700" style={styles.subrayado}>
+                        ¿Olvidaste tu contraseña?
+                    </Texto>
+                </Pressable>
 
                 <Boton titulo="Iniciar sesión" icono="siguiente" onPress={enviar} cargando={cargando} />
                 {errorGeneral && <Aviso mensaje={errorGeneral} />}
@@ -252,6 +281,11 @@ const styles = StyleSheet.create({
         gap: Espacio.xs,
         marginTop: Espacio.xl,
         marginBottom: Espacio.l,
+    },
+    olvide: {
+        alignSelf: 'flex-end',
+        marginTop: -Espacio.s,
+        paddingVertical: Espacio.xs,
     },
     espacioFlexible: {
         flexGrow: 1,

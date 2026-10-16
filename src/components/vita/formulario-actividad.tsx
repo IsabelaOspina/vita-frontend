@@ -26,10 +26,12 @@ import {
     unirFechaHora,
 } from '@/utils/salud';
 import { campoDelError } from '@/utils/textos';
+import { EJEMPLO_HORA } from '@/utils/validaciones';
 
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Aviso } from './aviso';
 import { Boton } from './boton';
+import { CampoHora } from './campo-hora';
 import { Campo, NotaCamposObligatorios } from './campo';
 import { ControlSegmentado } from './control-segmentado';
 import { Encabezado } from './encabezado';
@@ -154,6 +156,8 @@ export function FormularioActividad({ id }: { id?: number }) {
     const fechaFinal = textoFecha.trim() ? fechaEscrita : fecha;
     const hora = textoHora.trim() ? interpretarHora(textoHora) : null;
     const cuando = fechaFinal && hora ? unirFechaHora(fechaFinal, hora) : null;
+    // Solo se ofrecen los recordatorios que todavía quedarían en el futuro (por ejemplo, "1 día antes" no sirve para una cita de hoy)
+    const opcionesRecordatorio = cuando ? RECORDATORIOS.filter((r) => !r.valor || cuando.getTime() - Number(r.valor) * 60_000 > Date.now()) : RECORDATORIOS;
     const opcionesFecha = OPCIONES_FECHA();
     const opcionFecha = !textoFecha.trim() && fecha ? (opcionesFecha.find((o) => o.valor === aDia(fecha))?.valor ?? '') : '';
 
@@ -164,7 +168,7 @@ export function FormularioActividad({ id }: { id?: number }) {
         if (!tipo) e.tipo = 'Elige el tipo de actividad';
         if (!fechaFinal) e.fecha = textoFecha.trim() ? 'No entendí la fecha. Escribe, por ejemplo: 20/10/2026, el viernes o 20 de octubre' : 'Elige la fecha';
         if (!textoHora.trim()) e.hora = 'Escribe la hora';
-        else if (!hora) e.hora = 'No entendí la hora. Escribe, por ejemplo: 9:30 a. m. o 3 de la tarde';
+        else if (!hora) e.hora = `La hora no es válida. ${EJEMPLO_HORA}`;
         if (cuando && cuando.getTime() <= Date.now()) e.hora = 'La fecha y hora de la actividad deben ser futuras';
         if (ubicacion.trim().length > 255) e.ubicacion = 'La ubicación no puede superar 255 caracteres';
         if (descripcion.trim().length > 255) e.descripcion = 'La descripción no puede superar 255 caracteres';
@@ -282,8 +286,10 @@ export function FormularioActividad({ id }: { id?: number }) {
         valor: textoHora,
         asignar: (v) => {
             const h = interpretarHora(v);
-            setTextoHora(h ? horaCorta(unirFechaHora(new Date(), h)) : v);
-            quitarError('hora');
+            // Si lo dictado no es una hora, el campo queda vacío para que VITA la vuelva a preguntar
+            setTextoHora(h ? horaCorta(unirFechaHora(new Date(), h)) : '');
+            if (h) quitarError('hora');
+            else setErrores((e) => ({ ...e, hora: `La hora no es válida. ${EJEMPLO_HORA}` }));
         },
     };
     const campoLugar: CampoVoz = {
@@ -451,15 +457,12 @@ export function FormularioActividad({ id }: { id?: number }) {
                             error={errores.fecha}
                             ayuda={ayudaFecha}
                         />
-                        <Campo
+                        <CampoHora
                             etiqueta="Hora"
-                            icono="reloj"
                             placeholder="Ej: 9:30 a. m."
-                            value={textoHora}
-                            onChangeText={(v) => {
-                                setTextoHora(v);
-                                quitarError('hora');
-                            }}
+                            valor={textoHora}
+                            onCambiar={setTextoHora}
+                            onError={(e) => setErrores((x) => ({ ...x, hora: e }))}
                             error={errores.hora}
                             ayuda={ayudaHora}
                             obligatorio
@@ -498,8 +501,8 @@ export function FormularioActividad({ id }: { id?: number }) {
                         <Tarjeta titulo="Recordatorio" icono="campana">
                             <OpcionesFiltro
                                 etiqueta="Recordatorio"
-                                opciones={RECORDATORIOS}
-                                valor={recordatorio}
+                                opciones={opcionesRecordatorio}
+                                valor={opcionesRecordatorio.some((r) => r.valor === recordatorio) ? recordatorio : ''}
                                 onCambiar={(v) => {
                                     setRecordatorio(v);
                                     quitarError('recordatorio');

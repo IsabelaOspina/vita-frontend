@@ -27,10 +27,12 @@ import {
     unirFechaHora,
 } from '@/utils/salud';
 import { campoDelError } from '@/utils/textos';
+import { EJEMPLO_HORA } from '@/utils/validaciones';
 
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Aviso } from './aviso';
 import { Boton } from './boton';
+import { CampoHora } from './campo-hora';
 import { Campo, MarcaObligatorio, NotaCamposObligatorios } from './campo';
 import { ControlSegmentado } from './control-segmentado';
 import { Encabezado } from './encabezado';
@@ -103,7 +105,7 @@ export function FormularioHorario() {
         const n = Number(intervalo);
         if (cadaHoras && (!Number.isInteger(n) || n < 1 || n > 168)) e.intervalo = 'Escribe cada cuántas horas, entre 1 y 168';
         if (!textoHora.trim()) e.hora = cadaHoras ? 'Escribe a qué hora es la primera toma' : 'Escribe la hora';
-        else if (!hora) e.hora = 'No entendí la hora. Escribe, por ejemplo: 8:00 p. m.';
+        else if (!hora) e.hora = `La hora no es válida. ${EJEMPLO_HORA}`;
         if (conDias && dias.length === 0) e.dias = 'Selecciona al menos un día de la semana';
         if (textoHasta.trim() && !hasta) e.hasta = 'No entendí la fecha. Escribe, por ejemplo: 30/10/2026';
         const inicio = hora ? unirFechaHora(deFechaLocal(desde), hora) : null;
@@ -206,8 +208,10 @@ export function FormularioHorario() {
         valor: textoHora,
         asignar: (v) => {
             const h = interpretarHora(v);
-            setTextoHora(h ? horaCorta(unirFechaHora(new Date(), h)) : v);
-            quitarError('hora');
+            // Si lo dictado no es una hora, el campo queda vacío para que VITA la vuelva a preguntar
+            setTextoHora(h ? horaCorta(unirFechaHora(new Date(), h)) : '');
+            if (h) quitarError('hora');
+            else setErrores((e) => ({ ...e, hora: `La hora no es válida. ${EJEMPLO_HORA}` }));
         },
     };
     const campoHasta: CampoVoz = {
@@ -338,15 +342,12 @@ export function FormularioHorario() {
                     </View>
                 )}
 
-                <Campo
+                <CampoHora
                     etiqueta={cadaHoras ? 'Hora de la primera toma' : 'Hora'}
-                    icono="reloj"
                     placeholder="Ej: 8:00 p. m."
-                    value={textoHora}
-                    onChangeText={(v) => {
-                        setTextoHora(v);
-                        quitarError('hora');
-                    }}
+                    valor={textoHora}
+                    onCambiar={setTextoHora}
+                    onError={(e) => setErrores((x) => ({ ...x, hora: e }))}
                     error={errores.hora}
                     ayuda={resumen ? `Quedará: ${resumen}` : undefined}
                     obligatorio

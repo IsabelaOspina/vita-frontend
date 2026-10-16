@@ -18,6 +18,7 @@ import type { UsuarioRequest } from '@/dto/UsuarioRequest';
 import { ApiError } from '@/services/api';
 import { registrarUsuario } from '@/services/usuarioService';
 import { campoDelError } from '@/utils/textos';
+import { errorCedula, errorContrasena, errorCorreo, errorNombre, errorParentesco, errorTelefono } from '@/utils/validaciones';
 
 const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIcono }[] = [
     { tipo: 'VISUAL', titulo: 'Visual', icono: 'visual' },
@@ -29,7 +30,7 @@ const DISCAPACIDADES: { tipo: TipoDiscapacidad; titulo: string; icono: NombreIco
 const TITULO_CONTACTO = 'Contacto de emergencia';
 const EXPLICACION_CONTACTO =
     'Persona a quien avisaremos si solicitas ayuda de emergencia. Puedes registrarla ahora o más adelante; ' +
-    'si la agregas, el nombre y el teléfono son obligatorios.';
+    'si la agregas, el nombre, el teléfono y el parentesco son obligatorios.';
 
 const PREGUNTA_DISCAPACIDAD = '¿Tienes alguna discapacidad?';
 const EXPLICACION_DISCAPACIDAD =
@@ -45,26 +46,34 @@ function mensajeDeError(e: unknown): string {
 }
 
 type Errores = Partial<
-    Record<'nombre' | 'cedula' | 'correo' | 'contrasena' | 'contactoNombre' | 'contactoTelefono', string>
+    Record<'nombre' | 'cedula' | 'correo' | 'contrasena' | 'contactoNombre' | 'contactoTelefono' | 'contactoParentesco', string>
 >;
 
 function validar(d: Pick<UsuarioRequest, 'nombre' | 'cedula' | 'correo' | 'contrasena'>): Errores {
     const errores: Errores = {};
-    if (!d.nombre.trim()) errores.nombre = 'Escribe tu nombre completo';
-    if (!d.cedula.trim()) errores.cedula = 'Escribe tu número de cédula';
-    if (!d.correo.trim()) errores.correo = 'Escribe tu correo';
-    else if (!/^[^\s@]+@[^\s@]+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
-    if (d.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres';
+    // Mismas reglas que UsuarioRequest en el backend
+    const nombre = errorNombre(d.nombre, 'Escribe tu nombre completo');
+    const cedula = errorCedula(d.cedula, 'Escribe tu número de cédula');
+    const correo = errorCorreo(d.correo, 'Escribe tu correo');
+    const contrasena = errorContrasena(d.contrasena);
+    if (nombre) errores.nombre = nombre;
+    if (cedula) errores.cedula = cedula;
+    if (correo) errores.correo = correo;
+    if (contrasena) errores.contrasena = contrasena;
     return errores;
 }
 
-/** El contacto es opcional: si se llena algún campo, nombre y teléfono pasan a ser obligatorios (igual que en el backend). */
+/** El contacto es opcional: si se llena algún campo, nombre, teléfono y parentesco pasan a ser obligatorios (igual que en el backend). */
 function validarContacto(c: ContactoEmergenciaRequest): Errores {
     const errores: Errores = {};
     const seLleno = [c.nombre, c.telefono, c.parentesco].some((v) => v?.trim());
     if (!seLleno) return errores;
-    if (!c.nombre.trim()) errores.contactoNombre = 'Escribe el nombre de tu contacto';
-    if (!c.telefono.trim()) errores.contactoTelefono = 'Escribe el teléfono de tu contacto';
+    const nombre = errorNombre(c.nombre, 'Escribe el nombre de tu contacto');
+    const telefono = errorTelefono(c.telefono, { obligatorio: true, mensajeVacio: 'Escribe el teléfono de tu contacto' });
+    const parentesco = errorParentesco(c.parentesco, 'Escribe el parentesco, por ejemplo: mamá, hermano o amiga');
+    if (nombre) errores.contactoNombre = nombre;
+    if (telefono) errores.contactoTelefono = telefono;
+    if (parentesco) errores.contactoParentesco = parentesco;
     return errores;
 }
 
@@ -111,7 +120,7 @@ export default function RegistroScreen() {
         const contacto: ContactoEmergenciaRequest = {
             nombre: contactoNombre.trim(),
             telefono: contactoTelefono.trim(),
-            parentesco: contactoParentesco.trim() || undefined,
+            parentesco: contactoParentesco.trim(),
         };
         const hayContacto = Boolean(contacto.nombre || contacto.telefono || contacto.parentesco);
         const encontrados = { ...validar({ nombre, cedula, correo, contrasena }), ...validarContacto(contacto) };
@@ -144,6 +153,7 @@ export default function RegistroScreen() {
                 [/contrase/i, 'contrasena'],
                 [/nombre del contacto/i, 'contactoNombre'],
                 [/tel[eé]fono del contacto/i, 'contactoTelefono'],
+                [/parentesco/i, 'contactoParentesco'],
                 [/nombre/i, 'nombre'],
             ]);
             if (campo) setErrores({ [campo]: mensaje });
@@ -426,6 +436,7 @@ export default function RegistroScreen() {
                         ayuda="Qué relación tiene contigo"
                         value={contactoParentesco}
                         onChangeText={setContactoParentesco}
+                        error={errores.contactoParentesco}
                         autoCapitalize="sentences"
                         returnKeyType="done"
                     />

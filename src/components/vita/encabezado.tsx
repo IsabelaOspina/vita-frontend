@@ -17,6 +17,8 @@ type Props = {
     volver?: boolean;
     /** Qué hace "Volver" si no hay a dónde regresar (por ejemplo, al abrir el detalle directo desde un enlace). */
     alVolver?: () => void;
+    /** Si es true, "Volver" siempre usa alVolver (por ejemplo, para regresar al paso anterior de un formulario). */
+    alVolverPrimero?: boolean;
     /** Muestra el botón "Cerrar sesión" arriba a la derecha (en las pantallas principales). */
     alCerrarSesion?: () => void;
     /**
@@ -28,7 +30,7 @@ type Props = {
 };
 
 /** Encabezado de las pantallas con sesión: botón para volver, ícono, título, subtítulo y la barra de accesibilidad. */
-export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerrarSesion, accesibilidad = true }: Props) {
+export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alVolverPrimero, alCerrarSesion, accesibilidad = true }: Props) {
     const { colores } = useAccesibilidad();
 
     return (
@@ -37,7 +39,7 @@ export function Encabezado({ titulo, subtitulo, icono, volver, alVolver, alCerra
                 <View style={styles.barra}>
                     {volver ? (
                         <Pressable
-                            onPress={() => (router.canGoBack() ? router.back() : alVolver ? alVolver() : router.replace('/'))}
+                            onPress={() => (alVolverPrimero && alVolver ? alVolver() : router.canGoBack() ? router.back() : alVolver ? alVolver() : router.replace('/'))}
                             accessibilityRole="button"
                             accessibilityLabel="Volver"
                             hitSlop={8}

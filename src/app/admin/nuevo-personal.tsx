@@ -15,6 +15,7 @@ import { useComandosPantalla } from '@/context/asistente-context';
 import { crearPersonal } from '@/services/adminUsuarioService';
 import { mensajeDeError, tokenActual } from '@/utils/sesion';
 import { campoDelError } from '@/utils/textos';
+import { errorCedula, errorCorreo, errorNombre, errorTelefono } from '@/utils/validaciones';
 
 type Errores = Partial<Record<'nombre' | 'cedula' | 'correo' | 'telefono' | 'especialidad' | 'registro' | 'contrasena', string>>;
 
@@ -28,10 +29,15 @@ function validar(d: {
     contrasena: string;
 }): Errores {
     const errores: Errores = {};
-    if (!d.nombre.trim()) errores.nombre = 'Escribe el nombre completo';
-    if (!d.cedula.trim()) errores.cedula = 'Escribe el número de cédula';
-    if (!d.correo.trim()) errores.correo = 'Escribe el correo';
-    else if (!/^[^\s@]+@[^\s@]+$/.test(d.correo.trim())) errores.correo = 'Revisa el correo, parece incompleto';
+    // Mismas reglas que PersonalRequest en el backend
+    const nombre = errorNombre(d.nombre, 'Escribe el nombre completo');
+    const cedula = errorCedula(d.cedula, 'Escribe el número de cédula');
+    const correo = errorCorreo(d.correo, 'Escribe el correo');
+    const telefono = errorTelefono(d.telefono);
+    if (nombre) errores.nombre = nombre;
+    if (cedula) errores.cedula = cedula;
+    if (correo) errores.correo = correo;
+    if (telefono) errores.telefono = telefono;
     if (!d.especialidad.trim()) errores.especialidad = 'Escribe la especialidad';
     else if (d.especialidad.trim().length > 100) errores.especialidad = 'La especialidad admite máximo 100 caracteres';
     if (!d.registro.trim()) errores.registro = 'Escribe el número de registro profesional';

@@ -14,7 +14,7 @@ import { marcarTomaTomada } from '@/services/TomaMedicamentoService';
 import { deFechaLocal, horaCorta } from '@/utils/fechas';
 import { dejarAvisoPendiente, tomarAvisoPendiente } from '@/utils/fuente-sintomas';
 import { mensajeDeError } from '@/utils/sesion';
-import { describirHorario, nombreDiaRelativo, sinPuntoDoble, nombreTipoAviso, rangoDeLaSemana, rangoDelDia, tomaPorMarcar, vigenciaHorario } from '@/utils/salud';
+import { describirHorario, horarioVigente, nombreDiaRelativo, sinPuntoDoble, nombreTipoAviso, rangoDeLaSemana, rangoDelDia, tomaPorMarcar, vigenciaHorario } from '@/utils/salud';
 import { tomasDeMedicamento } from '@/utils/tomas';
 
 import { accionesComunesVoz } from './acciones-cuenta';
@@ -65,7 +65,7 @@ export function PantallaDetalleMedicamento({ id }: { id: number }) {
     }, [id]);
 
     const lectura = (m: MedicamentoResponse, lista: HorarioMedicamentoResponse[]) => {
-        const activos = lista.filter((h) => h.activo);
+        const activos = lista.filter((h) => horarioVigente(h));
         return (
             `${m.nombre}${m.dosis ? `, ${m.dosis}` : ''}${m.viaAdministracion ? `, vía ${m.viaAdministracion.toLowerCase()}` : ''}. ` +
             (m.activo ? '' : 'Está desactivado. ') +
@@ -93,7 +93,9 @@ export function PantallaDetalleMedicamento({ id }: { id: number }) {
         anunciar(mensaje);
     };
 
-    const activos = horarios.filter((h) => h.activo);
+    // Los horarios con fecha de fin vencida ya no se muestran como vigentes
+    const activos = horarios.filter((h) => horarioVigente(h));
+    const terminados = horarios.filter((h) => h.activo && !horarioVigente(h)).length;
     const finDeHoy = rangoDelDia(new Date()).hasta;
     // "Ya lo tomé" solo para tomas hasta hoy; las de días siguientes se ven pero no se marcan
     const marcables = tomas.filter((t) => tomaPorMarcar(t) && t.fechaHora <= finDeHoy);
@@ -242,7 +244,16 @@ export function PantallaDetalleMedicamento({ id }: { id: number }) {
                     <Tarjeta titulo="Horarios" icono="alarma">
                         {activos.length === 0 && (
                             <Texto variante="cuerpo" color="textoSecundario">
-                                {activo ? 'Todavía no tiene horarios. Agrega uno para que VITA te recuerde cada toma.' : 'No tiene horarios activos.'}
+                                {activo
+                                    ? terminados
+                                        ? 'Sus horarios ya terminaron. Agrega uno nuevo si debes seguir tomándolo.'
+                                        : 'Todavía no tiene horarios. Agrega uno para que VITA te recuerde cada toma.'
+                                    : 'No tiene horarios activos.'}
+                            </Texto>
+                        )}
+                        {terminados > 0 && activos.length > 0 && (
+                            <Texto variante="pequeno" color="textoTenue">
+                                {terminados === 1 ? '1 horario ya terminó.' : `${terminados} horarios ya terminaron.`}
                             </Texto>
                         )}
                         {activos.map((h) => (

@@ -2,12 +2,14 @@
   "routes": [
     { "route": "/login", "rewrite": "/login.html" },
     { "route": "/registro", "rewrite": "/registro.html" },
+    { "route": "/recuperar-contrasena", "rewrite": "/recuperar-contrasena.html" },
     { "route": "/cambiar-contrasena", "rewrite": "/cambiar-contrasena.html" },
     { "route": "/paciente", "rewrite": "/paciente/index.html" },
     { "route": "/paciente/accesibilidad", "rewrite": "/paciente/accesibilidad.html" },
     { "route": "/paciente/mi-cuenta", "rewrite": "/paciente/mi-cuenta.html" },
     { "route": "/paciente/salud", "rewrite": "/paciente/salud/index.html" },
     { "route": "/paciente/salud/hoy", "rewrite": "/paciente/salud/hoy.html" },
+    { "route": "/paciente/salud/recomendaciones", "rewrite": "/paciente/salud/recomendaciones.html" },
     { "route": "/paciente/salud/sintomas", "rewrite": "/paciente/salud/sintomas/index.html" },
     { "route": "/paciente/salud/sintomas/nuevo", "rewrite": "/paciente/salud/sintomas/nuevo.html" },
     { "route": "/paciente/salud/sintomas/evolucion", "rewrite": "/paciente/salud/sintomas/evolucion.html" },
@@ -29,6 +31,7 @@
     { "route": "/personal/paciente/sintoma", "rewrite": "/personal/paciente/sintoma.html" },
     { "route": "/personal/paciente/evolucion", "rewrite": "/personal/paciente/evolucion.html" },
     { "route": "/personal/paciente/historial", "rewrite": "/personal/paciente/historial.html" },
+    { "route": "/personal/paciente/recomendaciones", "rewrite": "/personal/paciente/recomendaciones.html" },
     { "route": "/personal/paciente/*", "rewrite": "/personal/paciente/[id].html" },
     { "route": "/admin", "rewrite": "/admin/index.html" },
     { "route": "/admin/nuevo-personal", "rewrite": "/admin/nuevo-personal.html" },
@@ -44,4 +47,6 @@
       "/*.{png,jpg,jpeg,gif,svg,ico,css,js,json,ttf,woff,woff2}"
     ]
   }
+}
+
 }

@@ -398,6 +398,18 @@ export function FormularioSintoma({ id }: Props) {
                             placeholder="Ej: ayer a las 8 pm, o 14/10/2026 09:30"
                             value={opcionCuando === '__otro' ? cuando : ''}
                             onChangeText={escribirCuando}
+                            onBlur={() => {
+                                // Al salir del campo se revisa que la fecha y la hora sean reales (por ejemplo, no "25:00")
+                                if (opcionCuando !== '__otro' || !cuando.trim()) return;
+                                const fecha = interpretarCuando(cuando);
+                                if (!fecha)
+                                    setErrores((e) => ({
+                                        ...e,
+                                        cuando: 'La fecha o la hora no son válidas. Ejemplo: ayer a las 8:00 p. m. o 14/10/2026 09:30',
+                                    }));
+                                else if (fecha.getTime() > Date.now() + TOLERANCIA_FUTURO_MS)
+                                    setErrores((e) => ({ ...e, cuando: 'La fecha y hora del síntoma no puede estar en el futuro' }));
+                            }}
                             error={errores.cuando}
                             ayuda={ayudaCuando}
                             returnKeyType="next"

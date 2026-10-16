@@ -41,6 +41,11 @@ export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void
                       ejecutar: () => router.navigate('/paciente/salud/medicamentos'),
                   },
                   {
+                      frases: ['ve a recomendaciones', 'ir a recomendaciones', 'abre recomendaciones', 'mis recomendaciones', 'recomendaciones', 'que me recomendaron'],
+                      etiqueta: 'ir a mis recomendaciones',
+                      ejecutar: () => router.navigate('/paciente/salud/recomendaciones'),
+                  },
+                  {
                       frases: ['ve a sintomas', 'ir a sintomas', 'abre sintomas', 've a mis sintomas', 'ir a mis sintomas', 'abre mis sintomas'],
                       etiqueta: 'ir a mis síntomas',
                       ejecutar: () => router.navigate('/paciente/salud/sintomas'),

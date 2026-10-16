@@ -7,7 +7,8 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import { deFechaLocal, horaCorta } from '@/utils/fechas';
 import { mensajeDeError } from '@/utils/sesion';
-import { enumerar, nombreTipoActividad, sinPuntoDoble, tomaPorMarcar } from '@/utils/salud';
+import { actividadVigente, enumerar, nombreTipoActividad, sinPuntoDoble, tomaPorMarcar, tomaVigente } from '@/utils/salud';
+import { contarRecomendacionesNoLeidas } from '@/services/recomendacionService';
 
 import { accionesComunesVoz, salir } from './acciones-cuenta';
 import { Boton } from './boton';
@@ -21,16 +22,45 @@ import { Texto } from './texto';
 type Resumen = { tomasPendientes: string[]; actividades: string[]; medicamentosActivos: number };
 
 /** Un acceso grande del menú. */
-function Acceso({ icono, titulo, detalle, color, fondo, onPress }: { icono: NombreIcono; titulo: string; detalle: string; color: string; fondo: string; onPress: () => void }) {
+function Acceso({
+    icono,
+    titulo,
+    detalle,
+    color,
+    fondo,
+    insignia,
+    onPress,
+}: {
+    icono: NombreIcono;
+    titulo: string;
+    detalle: string;
+    color: string;
+    fondo: string;
+    /** Número destacado (por ejemplo, recomendaciones nuevas). */
+    insignia?: number;
+    onPress: () => void;
+}) {
     const { colores } = useAccesibilidad();
     return (
         <Pressable
             onPress={onPress}
             accessibilityRole="button"
             accessibilityLabel={`${titulo}. ${detalle}`}
-            style={({ pressed }) => [styles.acceso, { backgroundColor: pressed ? colores.superficieSuave : colores.superficie, borderColor: colores.borde }]}>
+            style={({ pressed }) => [styles.acceso, { backgroundColor: pressed ? colores.superficieSuave : colores.superficie, borderColor: colores.borde }]}
+        >
             <View style={[styles.iconoAcceso, { backgroundColor: fondo }]}>
                 <Icono nombre={icono} tamano={28} color={color} />
+                {insignia ? (
+                    <View
+                        style={[styles.insignia, { backgroundColor: colores.error, borderColor: colores.superficie }]}
+                        accessibilityElementsHidden
+                        importantForAccessibility="no"
+                    >
+                        <Texto variante="pequeno" peso="800" style={{ color: '#FFFFFF' }}>
+                            {insignia}
+                        </Texto>
+                    </View>
+                ) : null}
             </View>
             <View style={styles.textos}>
                 <Texto variante="subtitulo" peso="800">
@@ -46,21 +76,30 @@ function Acceso({ icono, titulo, detalle, color, fondo, onPress }: { icono: Nomb
 }
 
 /**
- * Pestaña "Mi salud": resumen de hoy y tres accesos grandes (Agenda, Medicamentos y Síntomas).
+ * Pestaña "Mi salud": resumen de lo que falta hoy y accesos grandes (Agenda, Medicamentos, Síntomas y Recomendaciones).
  */
 export function PantallaMiSalud() {
     const { anunciar, colores } = useAccesibilidad();
     const [resumen, setResumen] = useState<Resumen | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [recomendacionesNuevas, setRecomendacionesNuevas] = useState(0);
 
     const cargar = useCallback(async () => {
         setError(null);
+        // Las recomendaciones nuevas no deben impedir que se vea el resumen si fallan
+        contarRecomendacionesNoLeidas()
+            .then((r) => setRecomendacionesNuevas(r.cantidad))
+            .catch(() => undefined);
         try {
             const datos = await datosDeHoy();
+            const ahora = Date.now();
+            // Solo lo que todavía viene (lo que ya pasó se ve en Hoy, en "Ya pasó hoy")
             setResumen({
-                tomasPendientes: datos.tomas.filter(tomaPorMarcar).map((t) => `${t.medicamentoNombre} a las ${horaCorta(deFechaLocal(t.fechaHora))}`),
+                tomasPendientes: datos.tomas
+                    .filter((t) => tomaPorMarcar(t) && tomaVigente(t, ahora))
+                    .map((t) => `${t.medicamentoNombre} a las ${horaCorta(deFechaLocal(t.fechaHora))}`),
                 actividades: datos.actividades
-                    .filter((a) => a.estado === 'PENDIENTE')
+                    .filter((a) => a.estado === 'PENDIENTE' && actividadVigente(a, ahora))
                     .map((a) => `${nombreTipoActividad(a.tipo).toLowerCase()} a las ${horaCorta(deFechaLocal(a.fechaHora))}`),
                 medicamentosActivos: datos.medicamentosActivos,
             });
@@ -78,22 +117,27 @@ export function PantallaMiSalud() {
     );
 
     const fraseHoy = !resumen
-        ? error ?? 'Cargando lo de hoy…'
+        ? (error ?? 'Cargando lo de hoy…')
         : resumen.tomasPendientes.length === 0 && resumen.actividades.length === 0
-            ? 'Hoy no tienes tomas ni actividades pendientes.'
-            : [
-            resumen.tomasPendientes.length
-                ? `Te ${resumen.tomasPendientes.length === 1 ? 'falta 1 toma' : `faltan ${resumen.tomasPendientes.length} tomas`}: ${enumerar(resumen.tomasPendientes)}`
-                : 'No te faltan tomas',
-            resumen.actividades.length ? `Tienes ${enumerar(resumen.actividades)}` : 'No tienes actividades pendientes',
-        ].join('. ') + '.';
+          ? 'Por hoy no tienes más tomas ni actividades pendientes.'
+          : [
+                resumen.tomasPendientes.length
+                    ? `Te ${resumen.tomasPendientes.length === 1 ? 'falta 1 toma' : `faltan ${resumen.tomasPendientes.length} tomas`}: ${enumerar(resumen.tomasPendientes)}`
+                    : 'No te faltan tomas por hoy',
+                resumen.actividades.length ? `Tienes ${enumerar(resumen.actividades)}` : 'No tienes más actividades hoy',
+            ].join('. ') + '.';
     const fraseHoyLimpia = sinPuntoDoble(fraseHoy);
 
     useComandosPantalla({
         cargando: !resumen && !error,
         titulo: 'Mi salud',
-        descripcion: `Mi salud. ${fraseHoyLimpia} Puedes decir: qué tengo hoy, agenda, medicamentos o síntomas.`,
-        ejemplos: ['qué tengo hoy', 'agenda', 'medicamentos', 'síntomas'],
+        descripcion:
+            `Mi salud. ${fraseHoyLimpia}` +
+            (recomendacionesNuevas
+                ? ` Tienes ${recomendacionesNuevas === 1 ? '1 recomendación nueva' : `${recomendacionesNuevas} recomendaciones nuevas`} de tu personal de salud.`
+                : '') +
+            ' Puedes decir: qué tengo hoy, agenda, medicamentos, síntomas o recomendaciones.',
+        ejemplos: ['qué tengo hoy', 'agenda', 'medicamentos', 'síntomas', 'recomendaciones'],
         campos: [],
         acciones: [
             { frases: ['lee el resumen', 'resumen', 'como voy hoy'], etiqueta: 'leer el resumen de hoy', ejecutar: () => anunciar(fraseHoyLimpia) },
@@ -141,6 +185,19 @@ export function PantallaMiSalud() {
                     fondo={colores.sintomas.fondo}
                     onPress={() => router.push('/paciente/salud/sintomas')}
                 />
+                <Acceso
+                    icono="medico"
+                    titulo="Recomendaciones"
+                    detalle={
+                        recomendacionesNuevas
+                            ? `${recomendacionesNuevas === 1 ? '1 nueva' : `${recomendacionesNuevas} nuevas`} de tu personal de salud`
+                            : 'De tu personal de salud'
+                    }
+                    color={colores.primario}
+                    fondo={colores.superficieSuave}
+                    insignia={recomendacionesNuevas}
+                    onPress={() => router.push('/paciente/salud/recomendaciones')}
+                />
             </View>
         </FondoPantalla>
     );
@@ -169,5 +226,17 @@ const styles = StyleSheet.create({
     textos: {
         flex: 1,
         gap: 2,
+    },
+    insignia: {
+        position: 'absolute',
+        top: -6,
+        right: -6,
+        minWidth: 24,
+        height: 24,
+        borderRadius: 12,
+        borderWidth: 2,
+        paddingHorizontal: 4,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });

@@ -1,349 +1,439 @@
-import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, type TextInput } from 'react-native';
 
-import { Espacio, Radio } from '@/constants/vita-theme';
+import { Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
-import type { ActividadSaludResponse } from '@/dto/ActividadSaludResponse';
-import type { RecordatorioResponse } from '@/dto/RecordatorioResponse';
-import type { TipoRecordatorio } from '@/dto/TipoRecordatorio';
-import { cancelarActividad, completarActividad, obtenerActividad } from '@/services/actividadSaludService';
-import { cancelarRecordatorio, crearRecordatorio, listarRecordatoriosDeActividad } from '@/services/recordatorioService';
-import { aPalabras } from '@/utils/comandos-voz';
-import { aDia, aFechaHoraLocal, deFechaLocal, horaCorta } from '@/utils/fechas';
-import { dejarAvisoPendiente } from '@/utils/fuente-sintomas';
+import type { SintomaResponse } from '@/dto/SintomaResponse';
+import { actualizarSintoma, obtenerSintoma, obtenerTiposSintoma, registrarSintoma } from '@/services/sintomaService';
+import { aPalabras, type CampoVoz, type Resultado } from '@/utils/comandos-voz';
+import { aFechaHoraLocal, aTextoCampo, deFechaLocal, fechaHoraLarga, interpretarCuando } from '@/utils/fechas';
 import { mensajeDeError } from '@/utils/sesion';
-import { cuandoActividad, sinPuntoDoble, nombreEstadoActividad, nombreTipoActividad, nombreTipoAviso, TIPOS_AVISO } from '@/utils/salud';
+import { numeroIntensidad, separarSintoma, SINTOMAS_COMUNES } from '@/utils/sintomas';
+import { campoDelError } from '@/utils/textos';
 
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Aviso } from './aviso';
 import { Boton } from './boton';
-import { ControlSegmentado } from './control-segmentado';
-import { coloresTipoActividad } from './elemento-actividad';
+import { Campo, NotaCamposObligatorios } from './campo';
 import { Encabezado } from './encabezado';
 import { EstadoCarga } from './estado-carga';
-import { FilaDato } from './fila-dato';
 import { FondoPantalla } from './fondo-pantalla';
 import { OpcionesFiltro } from './opciones-filtro';
+import { SelectorIntensidad } from './selector-intensidad';
 import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
 
-/** Cuánto antes llega un recordatorio nuevo (minutos). */
-const ANTES = [
-    { valor: '30', titulo: '30 minutos antes' },
-    { valor: '60', titulo: '1 hora antes' },
-    { valor: '1440', titulo: '1 día antes' },
-];
+type Errores = Partial<Record<'tipo' | 'intensidad' | 'cuando' | 'observaciones', string>>;
 
-const NOMBRE_ESTADO_RECORDATORIO: Record<string, string> = {
-    PENDIENTE: 'Programado',
-    ENVIADO: 'Enviado',
-    CONFIRMADO: 'Visto',
-    CANCELADO: 'Cancelado',
+/** Cuántos síntomas sugeridos se muestran a la vez. */
+const MAX_SUGERENCIAS = 6;
+
+/** Tolerancia del backend por si el reloj del celular va adelantado. */
+const TOLERANCIA_FUTURO_MS = 5 * 60 * 1000;
+
+/** Respuestas que significan "no quiero agregar observaciones". */
+const SIN_OBSERVACIONES = /^(no|ninguna|ninguno|nada|no gracias|no tengo)$/;
+
+/** "dolor de cabeza" → "Dolor de cabeza". */
+const capitalizar = (texto: string) => {
+    const limpio = texto.trim().replace(/\s+/g, ' ');
+    return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+};
+
+/** Mismas reglas que SintomaRequest en el backend. */
+function validar(d: { tipo: string; intensidad: number | null; cuando: string; observaciones: string }): Errores {
+    const errores: Errores = {};
+    if (!d.tipo.trim()) errores.tipo = 'Escribe qué síntoma tienes';
+    else if (d.tipo.trim().length > 100) errores.tipo = 'El síntoma admite máximo 100 caracteres';
+    if (d.intensidad === null) errores.intensidad = 'Elige la intensidad, del 1 al 10';
+    if (d.cuando.trim()) {
+        const fecha = interpretarCuando(d.cuando);
+        if (!fecha) errores.cuando = 'No entendí la fecha. Escribe, por ejemplo: hace 2 horas, ayer a las 8 pm o 14/10/2026 09:30';
+        else if (fecha.getTime() > Date.now() + TOLERANCIA_FUTURO_MS) errores.cuando = 'La fecha y hora del síntoma no puede estar en el futuro';
+    }
+    if (d.observaciones.trim().length > 1000) errores.observaciones = 'Las observaciones admiten máximo 1000 caracteres';
+    return errores;
+}
+
+type Props = {
+    /** Id del síntoma a editar. Sin id, se registra uno nuevo. */
+    id?: number;
 };
 
 /**
- * Detalle de una actividad: sus datos, sus recordatorios (agregar y cancelar) y las acciones
- * Marcar como realizada, Editar y Cancelar actividad (cancelar siempre se confirma).
+ * Registrar o editar un síntoma (paciente). Obligatorios: qué síntoma y su intensidad.
+ * Cuándo y las observaciones son opcionales: si no se dice cuándo, se guarda con la hora actual.
+ *
+ * Por voz se puede decir todo junto: "tengo dolor de cabeza intensidad 7 hace dos horas".
+ * Al abrirlo desde la lista con esa frase, llega ya lleno (parámetros tipo, intensidad y cuando).
  */
-export function PantallaDetalleActividad({ id }: { id: number }) {
-    const { anunciar, leer, colores, altoContraste } = useAccesibilidad();
+export function FormularioSintoma({ id }: Props) {
+    const editando = id !== undefined;
+    const { anunciar } = useAccesibilidad();
+    const inicial = useLocalSearchParams<{ tipo?: string; intensidad?: string; cuando?: string }>();
 
-    const [actividad, setActividad] = useState<ActividadSaludResponse | null>(null);
-    const [recordatorios, setRecordatorios] = useState<RecordatorioResponse[]>([]);
-    const [cargando, setCargando] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [aviso, setAviso] = useState<{ tipo: 'exito' | 'error'; mensaje: string } | null>(null);
-    const [trabajando, setTrabajando] = useState(false);
-    const [confirmandoCancelar, setConfirmandoCancelar] = useState(false);
+    const [tipo, setTipo] = useState(editando ? '' : (inicial.tipo ?? ''));
+    const [intensidad, setIntensidad] = useState<number | null>(
+        !editando && inicial.intensidad ? numeroIntensidad(inicial.intensidad) : null,
+    );
+    const [cuando, setCuando] = useState(editando ? '' : (inicial.cuando ?? ''));
+    const [observaciones, setObservaciones] = useState('');
+    const [sugerencias, setSugerencias] = useState<string[]>(SINTOMAS_COMUNES);
 
-    const [antes, setAntes] = useState('60');
-    const [tipoAviso, setTipoAviso] = useState<TipoRecordatorio>('VOCAL');
-    const [errorRecordatorio, setErrorRecordatorio] = useState<string | null>(null);
+    /** Al editar: el síntoma como estaba y su fecha como se muestra en el campo. */
+    const [original, setOriginal] = useState<SintomaResponse | null>(null);
+    const [cuandoOriginal, setCuandoOriginal] = useState('');
+    const [cargandoDatos, setCargandoDatos] = useState(editando);
+    const [errorCarga, setErrorCarga] = useState<string | null>(null);
 
-    const cargar = useCallback(async () => {
-        setCargando(true);
-        setError(null);
+    const [errores, setErrores] = useState<Errores>({});
+    const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
+    const [guardando, setGuardando] = useState(false);
+
+    const observacionesRef = useRef<TextInput>(null);
+
+    // Los tipos que ya registró se sugieren primero (y se completan con los más comunes)
+    useEffect(() => {
+        obtenerTiposSintoma()
+            .then((tipos) => {
+                const propios = tipos.map((t) => t.tipo);
+                const comunes = SINTOMAS_COMUNES.filter((c) => !propios.some((p) => aPalabras(p) === aPalabras(c)));
+                setSugerencias([...propios, ...comunes]);
+            })
+            .catch(() => {
+                // Sin sugerencias propias se dejan las comunes
+            });
+    }, []);
+
+    const cargar = async () => {
+        if (id === undefined) return;
+        setCargandoDatos(true);
+        setErrorCarga(null);
         try {
-            const [a, r] = await Promise.all([obtenerActividad(id), listarRecordatoriosDeActividad(id)]);
-            setActividad(a);
-            setRecordatorios(r.sort((x, y) => x.fechaHora.localeCompare(y.fechaHora)));
-            return a;
+            const sintoma = await obtenerSintoma(id);
+            const texto = aTextoCampo(deFechaLocal(sintoma.fechaHora));
+            setOriginal(sintoma);
+            setTipo(sintoma.tipo);
+            setIntensidad(sintoma.intensidad);
+            setCuando(texto);
+            setCuandoOriginal(texto);
+            setObservaciones(sintoma.observaciones ?? '');
         } catch (e) {
-            setError(mensajeDeError(e, 'No pudimos cargar la actividad.'));
-            return null;
+            setErrorCarga(mensajeDeError(e, 'No pudimos cargar el síntoma.'));
         } finally {
-            setCargando(false);
+            setCargandoDatos(false);
         }
+    };
+
+    useEffect(() => {
+        void cargar();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    const lectura = (a: ActividadSaludResponse) =>
-        `${nombreTipoActividad(a.tipo)}: ${a.nombre}. ${cuandoActividad(a.fechaHora)}${a.ubicacion ? `, en ${a.ubicacion}` : ''}. ` +
-        `${nombreEstadoActividad(a.estado)}.${a.descripcion ? ` Nota: ${a.descripcion}.` : ''}`;
+    /** Al corregir un campo se quita su error. */
+    const cambiar = (campo: keyof Errores, asignar: (valor: string) => void) => (valor: string) => {
+        asignar(valor);
+        setErrores((e) => (e[campo] ? { ...e, [campo]: undefined } : e));
+    };
+    const cambiarTipo = cambiar('tipo', setTipo);
+    const cambiarCuando = cambiar('cuando', setCuando);
+    /**
+     * Si la persona está escribiendo en "Otra fecha y hora", lo escrito se respeta tal cual aunque
+     * a mitad de camino coincida con un botón ("ayer" de "ayer a las 8 pm"). Los botones solo se
+     * marcan cuando se tocan (o cuando la fecha llega por voz o al editar).
+     */
+    const [escribiendoFecha, setEscribiendoFecha] = useState(false);
+    const elegirCuando = (valor: string) => {
+        setEscribiendoFecha(false);
+        cambiarCuando(valor);
+    };
+    const escribirCuando = (texto: string) => {
+        setEscribiendoFecha(true);
+        cambiarCuando(texto);
+    };
+    const cambiarObservaciones = cambiar('observaciones', setObservaciones);
 
-    const primeraVezRef = useRef(true);
-    useFocusEffect(
-        useCallback(() => {
-            void cargar().then((a) => {
-                if (a && primeraVezRef.current) leer(lectura(a), true);
-                primeraVezRef.current = false;
-            });
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [cargar]),
+    const volver = () => (router.canGoBack() ? router.back() : router.replace('/paciente/salud/sintomas'));
+
+    // Sugerencias mientras se escribe: con el campo vacío, las más usadas; al escribir, las que contienen
+    // lo escrito ("dol" → "Dolor de cabeza", "Dolor de espalda"…). Así se termina de escribir con un toque.
+    const escrito = aPalabras(tipo);
+    const sugerenciasVisibles = (escrito ? sugerencias.filter((s) => aPalabras(s).includes(escrito)) : sugerencias).slice(
+        0,
+        MAX_SUGERENCIAS,
     );
 
-    const volver = () => (router.canGoBack() ? router.back() : router.replace('/paciente/salud/agenda'));
-    const pendiente = actividad?.estado === 'PENDIENTE';
-    const futura = actividad ? deFechaLocal(actividad.fechaHora).getTime() > Date.now() : false;
+    // Lo que se muestra debajo de "¿Cuándo?": cómo se va a guardar
+    const fechaEntendida = cuando.trim() ? interpretarCuando(cuando) : null;
+    const ayudaCuando = !cuando.trim()
+        ? 'Si no indicas la fecha, se registra con la hora actual.'
+        : fechaEntendida
+          ? `Se guardará: ${fechaHoraLarga(aFechaHoraLocal(fechaEntendida))}`
+          : undefined;
 
-    const avisar = (tipo: 'exito' | 'error', texto: string) => {
-        const mensaje = sinPuntoDoble(texto);
-        setAviso({ tipo, mensaje });
-        anunciar(mensaje);
-    };
-
-    const completar = async () => {
-        if (!actividad) return;
-        setTrabajando(true);
-        try {
-            setActividad(await completarActividad(actividad.id));
-            avisar('exito', `Listo, marqué ${actividad.nombre} como realizada.`);
-        } catch (e) {
-            avisar('error', mensajeDeError(e, 'No pudimos marcar la actividad.'));
-        } finally {
-            setTrabajando(false);
-        }
-    };
-
-    const cancelar = async () => {
-        if (!actividad) return;
-        setTrabajando(true);
-        try {
-            await cancelarActividad(actividad.id);
-            const mensaje = `Se canceló ${actividad.nombre}.`;
-            anunciar(mensaje);
-            dejarAvisoPendiente(mensaje);
-            router.dismissTo({ pathname: '/paciente/salud/agenda', params: { dia: aDia(deFechaLocal(actividad.fechaHora)) } });
-        } catch (e) {
-            avisar('error', mensajeDeError(e, 'No pudimos cancelar la actividad.'));
-        } finally {
-            setTrabajando(false);
-            setConfirmandoCancelar(false);
-        }
-    };
-
-    const agregarRecordatorio = async (minutos = antes) => {
-        if (!actividad) return;
-        setErrorRecordatorio(null);
-        const cuando = deFechaLocal(actividad.fechaHora);
-        const fecha = new Date(cuando.getTime() - Number(minutos) * 60000);
-        if (fecha.getTime() <= Date.now()) {
-            const mensaje = 'Ese recordatorio quedaría en el pasado. Elige uno más cercano a la actividad.';
-            setErrorRecordatorio(mensaje);
-            anunciar(mensaje);
+    const guardar = async () => {
+        const encontrados = validar({ tipo, intensidad, cuando, observaciones });
+        setErrores(encontrados);
+        setErrorGeneral(null);
+        if (Object.keys(encontrados).length > 0 || intensidad === null) {
+            anunciar(`Revisa el formulario. ${Object.values(encontrados).join('. ')}`);
             return;
         }
-        setTrabajando(true);
+
+        // Al editar, la fecha solo se envía si cambió (si no, el backend conserva la que tenía)
+        const cambioCuando = editando ? cuando.trim() !== cuandoOriginal : !!cuando.trim();
+        const fecha = cambioCuando ? interpretarCuando(cuando) : null;
+        const datos = {
+            tipo: capitalizar(tipo),
+            intensidad,
+            fechaHora: fecha ? aFechaHoraLocal(fecha) : undefined,
+            observaciones: observaciones.trim() || undefined,
+        };
+
+        setGuardando(true);
         try {
-            const nuevo = await crearRecordatorio(actividad.id, {
-                fechaHora: aFechaHoraLocal(fecha),
-                mensaje: `${actividad.nombre} a las ${horaCorta(cuando)}${actividad.ubicacion ? `, en ${actividad.ubicacion}` : ''}`,
-                tipoRecordatorio: tipoAviso,
-            });
-            setRecordatorios((r) => [...r, nuevo].sort((x, y) => x.fechaHora.localeCompare(y.fechaHora)));
-            avisar('exito', `Listo, te lo recordaré ${ANTES.find((a) => a.valor === minutos)?.titulo.toLowerCase()}, con aviso de ${nombreTipoAviso(tipoAviso).toLowerCase()}.`);
+            const guardado = id !== undefined ? await actualizarSintoma(id, datos) : await registrarSintoma(datos);
+            const mensaje = editando
+                ? `Listo, guardé los cambios de ${guardado.tipo.toLowerCase()}.`
+                : `Listo, guardé ${guardado.tipo.toLowerCase()} con intensidad ${guardado.intensidad} de 10.`;
+            anunciar(mensaje);
+            // Vuelve a la lista (que muestra el aviso y ya trae el síntoma nuevo o editado)
+            router.dismissTo({ pathname: '/paciente/salud/sintomas', params: { aviso: mensaje } });
         } catch (e) {
-            const mensaje = mensajeDeError(e, 'No pudimos crear el recordatorio.');
-            setErrorRecordatorio(mensaje);
+            const mensaje = mensajeDeError(e, 'No pudimos guardar el síntoma.');
+            // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
+            const campo = campoDelError<keyof Errores>(mensaje, [
+                [/tipo|s[ií]ntoma es obligatorio/i, 'tipo'],
+                [/intensidad/i, 'intensidad'],
+                [/fecha|hora|futuro/i, 'cuando'],
+                [/observaci/i, 'observaciones'],
+            ]);
+            if (campo) setErrores({ [campo]: mensaje });
+            else setErrorGeneral(mensaje);
             anunciar(mensaje);
         } finally {
-            setTrabajando(false);
+            setGuardando(false);
         }
     };
 
-    const quitarRecordatorio = async (r: RecordatorioResponse) => {
-        try {
-            const cancelado = await cancelarRecordatorio(r.id);
-            setRecordatorios((lista) => lista.map((x) => (x.id === r.id ? cancelado : x)));
-            avisar('exito', 'Listo, cancelé el recordatorio.');
-        } catch (e) {
-            avisar('error', mensajeDeError(e, 'No pudimos cancelar el recordatorio.'));
+    // ----- Asistente de voz ----------------------------------------------------------------------
+
+    const campoTipo: CampoVoz = {
+        claves: ['tipo de sintoma', 'el sintoma', 'sintoma', 'que siento', 'que sientes', 'tipo'],
+        etiqueta: 'Síntoma',
+        pregunta: '¿Qué síntoma tienes? Por ejemplo: dolor de cabeza, mareo o náuseas.',
+        tipo: 'texto',
+        valor: tipo,
+        asignar: (valor) => setTipo(capitalizar(valor)),
+    };
+    const campoIntensidad: CampoVoz = {
+        claves: ['intensidad', 'nivel', 'que tan fuerte', 'fuerza'],
+        etiqueta: 'Intensidad',
+        pregunta: '¿Qué intensidad tiene, en una escala de 1 a 10? 1 es una molestia mínima y 10 la máxima intensidad.',
+        tipo: 'texto',
+        valor: intensidad === null ? '' : String(intensidad),
+        asignar: (valor) => {
+            const numero = numeroIntensidad(valor);
+            if (numero !== null) {
+                setIntensidad(numero);
+                setErrores((e) => ({ ...e, intensidad: undefined }));
+            } else {
+                setErrores((e) => ({ ...e, intensidad: 'La intensidad debe ser un número del 1 al 10' }));
+            }
+        },
+    };
+    const campoCuando: CampoVoz = {
+        claves: ['fecha y hora', 'cuando', 'fecha', 'hora', 'empezo', 'fue'],
+        etiqueta: 'Cuándo',
+        pregunta: '¿Cuándo lo sentiste? Por ejemplo: hace dos horas, o ayer a las 8 de la noche. Si fue ahora, di: ahora.',
+        tipo: 'texto',
+        valor: cuando,
+        // En un síntoma nuevo, "ahora" es dejarlo vacío (el backend usa la hora actual)
+        asignar: (valor) => {
+            setEscribiendoFecha(false);
+            setCuando(!editando && /^(ahora|ahorita|ya)$/i.test(valor.trim()) ? '' : valor.toLowerCase());
+        },
+        opcional: true,
+    };
+    const campoObservaciones: CampoVoz = {
+        claves: ['observaciones', 'observacion', 'notas', 'nota', 'comentario', 'detalles'],
+        etiqueta: 'Observaciones',
+        pregunta: '¿Qué observación quieres agregar? Por ejemplo: empezó después del almuerzo.',
+        tipo: 'texto',
+        valor: observaciones,
+        asignar: (valor) => setObservaciones(SIN_OBSERVACIONES.test(aPalabras(valor)) ? '' : valor),
+        opcional: true,
+    };
+    const campos = [campoTipo, campoIntensidad, campoCuando, campoObservaciones];
+
+    /** "Tengo dolor de cabeza intensidad 7 hace dos horas": llena los tres campos de una vez. */
+    const dictado = (texto: string, pendiente: string | null): Resultado[] | null => {
+        // Si VITA preguntó por cuándo o por las observaciones, lo dicho es la respuesta tal cual
+        if (pendiente === 'Cuándo' || pendiente === 'Observaciones') return null;
+        const conIntensidad = /\b(intensidad|nivel|de 10|de diez)\b/.test(aPalabras(texto));
+        const partes = separarSintoma(texto, true) ?? (conIntensidad ? separarSintoma(texto, false) : null);
+        if (!partes) {
+            // "Hace dos horas", "ayer en la noche": es el cuándo
+            if (!pendiente && interpretarCuando(texto)) return [{ tipo: 'campo', campo: campoCuando, valor: texto }];
+            return null;
         }
+        const resultados: Resultado[] = [];
+        if (partes.tipo) resultados.push({ tipo: 'campo', campo: campoTipo, valor: partes.tipo });
+        if (partes.intensidad) resultados.push({ tipo: 'campo', campo: campoIntensidad, valor: String(partes.intensidad) });
+        if (partes.cuando) resultados.push({ tipo: 'campo', campo: campoCuando, valor: partes.cuando });
+        return resultados.length ? resultados : null;
     };
 
-    const activos = recordatorios.filter((r) => r.estado !== 'CANCELADO');
-    const fechaRecordatorio = (r: RecordatorioResponse) => cuandoActividad(r.fechaHora);
+    const titulo = editando ? 'Editar síntoma' : 'Registrar síntoma';
 
     useComandosPantalla({
-        cargando: cargando,
-        titulo: 'Detalle de la actividad',
-        descripcion: pendiente
-            ? 'Detalle de la actividad. Puedes decir: lee la actividad, recuérdamelo una hora antes, marcar como realizada, editar o cancelar la actividad.'
-            : 'Detalle de la actividad. Puedes decir: lee la actividad o volver.',
-        ejemplos: ['lee la actividad', 'recuérdamelo una hora antes', 'lee los recordatorios', 'marcar como realizada', 'editar', 'cancelar la actividad'],
-        campos: [],
-        listas: [
-            {
-                claves: ['lee los recordatorios', 'recordatorios', 'mis recordatorios'],
-                nombre: 'Recordatorios',
-                vacia: 'Esta actividad no tiene recordatorios.',
-                elementos: activos.map((r) => ({ nombre: fechaRecordatorio(r), detalle: `aviso de ${nombreTipoAviso(r.tipoRecordatorio).toLowerCase()}, ${NOMBRE_ESTADO_RECORDATORIO[r.estado].toLowerCase()}` })),
-                acciones: [
-                    {
-                        frases: ['cancela', 'cancelar', 'quita', 'quitar', 'elimina', 'borra'],
-                        noAplica: (i) => (activos[i].estado === 'PENDIENTE' ? null : 'Ese recordatorio ya se envió y no se puede cancelar.'),
-                        confirmar: (e) => `¿Cancelo el recordatorio de ${e.nombre.toLowerCase()}?`,
-                        ejecutar: (i) => void quitarRecordatorio(activos[i]),
-                    },
-                ],
-            },
+        titulo,
+        descripcion: editando
+            ? 'Editar síntoma. Dime qué quieres cambiar, por ejemplo: la intensidad es 5, y luego di: guardar.'
+            : 'Registrar síntoma. Dime qué sientes y qué tan fuerte, del 1 al 10. Por ejemplo: dolor de cabeza intensidad 7.',
+        ejemplos: [
+            'tengo dolor de cabeza intensidad 7',
+            'la intensidad es 5',
+            'fue hace dos horas',
+            'las observaciones son: empezó después del almuerzo',
+            'guardar',
         ],
+        // Mientras carga el síntoma a editar no se pregunta nada
+        campos: editando && !original ? [] : campos,
+        pasosOpcionales: editando
+            ? []
+            : [
+                  {
+                      pregunta: cuando
+                          ? 'Responde sí o no: ¿quieres agregar una observación?'
+                          : 'Responde sí o no: ¿quieres decir cuándo empezó o agregar una observación? Si no, se guarda con la hora de ahora.',
+                      campos: ['Cuándo', 'Observaciones'],
+                  },
+              ],
         acciones: [
-            { frases: ['lee la actividad', 'leer', 'lee', 'detalle', 'que dice'], etiqueta: 'leer la actividad', ejecutar: () => anunciar(actividad ? lectura(actividad) : 'Todavía estoy cargando la actividad.') },
-            ...(pendiente
-                ? [
-                      {
-                          frases: ['marcar como realizada', 'marca como realizada', 'ya fui', 'ya la hice', 'completar', 'realizada', 'completada'],
-                          etiqueta: 'marcar como realizada',
-                          ejecutar: () => void completar(),
-                      },
-                      { frases: ['editar', 'edita', 'cambiar', 'cambia', 'modificar'], etiqueta: 'editar la actividad', ejecutar: () => router.push({ pathname: '/paciente/salud/agenda/editar/[id]', params: { id: String(id) } }) },
-                      {
-                          frases: ['cancelar la actividad', 'cancela la actividad', 'cancelar la cita', 'cancela la cita', 'ya no voy', 'eliminar', 'elimina'],
-                          etiqueta: 'cancelar la actividad',
-                          confirmar: '¿Seguro que quieres cancelar esta actividad? Sus recordatorios también se cancelan.',
-                          ejecutar: () => void cancelar(),
-                      },
-                  ]
-                : []),
-            { frases: ['volver', 'atras', 'regresar', 'agenda'], ejecutar: volver },
+            {
+                frases: ['guardar', 'guarda', 'guardalo', 'guardala', 'guardar sintoma', 'guardar cambios', 'registrar', 'registralo', 'terminar', 'enviar', 'listo'],
+                etiqueta: editando ? 'guardar los cambios' : 'guardar el síntoma',
+                ejecutar: () => void guardar(),
+            },
+            { frases: ['volver', 'atras', 'regresar', 'no guardar', 'salir del formulario'], ejecutar: volver },
             ...accionesComunesVoz('USUARIO', anunciar),
         ],
-        dictado: (texto) => {
-            const t = aPalabras(texto);
-            if (!pendiente || !/^(recuerdame|recuerdamelo|avisame|ponme un recordatorio|agrega un recordatorio)/.test(t)) return null;
-            const minutos = /(media hora|30 minutos|treinta minutos)/.test(t) ? '30' : /(un dia|1 dia|dia antes)/.test(t) ? '1440' : /(una hora|1 hora)/.test(t) ? '60' : null;
-            if (!minutos) return null;
-            return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => void agregarRecordatorio(minutos) } }];
-        },
+        dictado,
     });
 
-    const colorTipo = actividad ? coloresTipoActividad(actividad.tipo, colores, altoContraste) : null;
+    // ----- Pantalla --------------------------------------------------------------------------------
+
+    const opcionesCuando = editando
+        ? [
+              { valor: cuandoOriginal, titulo: 'Como estaba' },
+              { valor: 'ahora', titulo: 'Ahora' },
+              { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
+              { valor: 'ayer', titulo: 'Ayer' },
+          ]
+        : [
+              { valor: '', titulo: 'Ahora' },
+              { valor: 'hace 1 hora', titulo: 'Hace 1 hora' },
+              { valor: 'hace 3 horas', titulo: 'Hace 3 horas' },
+              { valor: 'ayer', titulo: 'Ayer' },
+          ];
+    const opcionCuando = escribiendoFecha
+        ? '__otro'
+        : (opcionesCuando.find((o) => o.valor === cuando.trim().toLowerCase())?.valor ?? '__otro');
 
     return (
         <FondoPantalla>
-            <Encabezado volver alVolver={volver} icono="calendario" titulo={actividad?.nombre ?? 'Actividad'} subtitulo={actividad ? cuandoActividad(actividad.fechaHora) : undefined} />
+            <Encabezado volver alVolver={volver} titulo={titulo} subtitulo="¿Qué sientes y qué tan fuerte?" />
 
-            {aviso && (
-                <View style={styles.aviso}>
-                    <Aviso tipo={aviso.tipo} mensaje={aviso.mensaje} />
-                </View>
-            )}
-
-            <EstadoCarga cargando={cargando && !actividad} error={error} reintentar={cargar} hayDatos={!!actividad} />
-
-            {actividad && colorTipo && (
+            {editando && !original ? (
+                <EstadoCarga cargando={cargandoDatos} error={errorCarga} reintentar={cargar} hayDatos={false} />
+            ) : (
                 <>
-                    <Tarjeta titulo="Datos" icono="info">
-                        <View style={styles.etiquetas}>
-                            <View style={[styles.chip, { backgroundColor: colorTipo.fondo, borderColor: colorTipo.color }]}>
-                                <Texto variante="etiqueta" peso="700" style={{ color: colorTipo.color }}>
-                                    {nombreTipoActividad(actividad.tipo)}
+                    <Tarjeta titulo="Síntoma" icono="sintomas">
+                        <Campo
+                            etiqueta="¿Qué sientes?"
+                            icono="sintomas"
+                            placeholder="Ej: Dolor de cabeza"
+                            value={tipo}
+                            onChangeText={cambiarTipo}
+                            error={errores.tipo}
+                            autoCapitalize="sentences"
+                            maxLength={100}
+                            obligatorio
+                        />
+                        {sugerenciasVisibles.length > 0 && (
+                            <View style={styles.sugerencias}>
+                                <Texto variante="pequeno" color="textoSecundario">
+                                    {escrito ? 'Toca una sugerencia para completarlo:' : 'Toca uno para elegirlo:'}
                                 </Texto>
-                            </View>
-                            <View
-                                style={[
-                                    styles.chip,
-                                    {
-                                        backgroundColor: pendiente ? colores.superficieSuave : actividad.estado === 'COMPLETADA' ? colores.exitoFondo : colores.errorFondo,
-                                        borderColor: 'transparent',
-                                    },
-                                ]}>
-                                <Texto
-                                    variante="etiqueta"
-                                    peso="700"
-                                    style={{ color: pendiente ? colores.textoSecundario : actividad.estado === 'COMPLETADA' ? colores.exito : colores.error }}>
-                                    {nombreEstadoActividad(actividad.estado)}
-                                </Texto>
-                            </View>
-                        </View>
-                        <FilaDato etiqueta="Cuándo" valor={cuandoActividad(actividad.fechaHora)} icono="reloj" />
-                        {actividad.ubicacion ? <FilaDato etiqueta="Lugar" valor={actividad.ubicacion} icono="ubicacion" /> : null}
-                        {actividad.descripcion ? <FilaDato etiqueta="Descripción" valor={actividad.descripcion} icono="nota" /> : null}
-                        {actividad.fechaHoraCumplimiento ? (
-                            <FilaDato etiqueta="Realizada" valor={cuandoActividad(actividad.fechaHoraCumplimiento)} icono="check" />
-                        ) : null}
-                    </Tarjeta>
-
-                    <Tarjeta titulo="Recordatorios" icono="campana">
-                        {activos.length === 0 && (
-                            <Texto variante="cuerpo" color="textoSecundario">
-                                Esta actividad no tiene recordatorios.
-                            </Texto>
-                        )}
-                        {activos.map((r) => (
-                            <View key={r.id} style={[styles.recordatorio, { borderColor: colores.borde }]}>
-                                <View style={styles.textos} accessible accessibilityLabel={`Recordatorio ${fechaRecordatorio(r)}, aviso de ${nombreTipoAviso(r.tipoRecordatorio).toLowerCase()}, ${NOMBRE_ESTADO_RECORDATORIO[r.estado].toLowerCase()}`}>
-                                    <Texto variante="cuerpo" peso="700">
-                                        {fechaRecordatorio(r)}
-                                    </Texto>
-                                    <Texto variante="pequeno" color="textoSecundario">
-                                        Aviso de {nombreTipoAviso(r.tipoRecordatorio).toLowerCase()} · {NOMBRE_ESTADO_RECORDATORIO[r.estado]}
-                                    </Texto>
-                                </View>
-                                {r.estado === 'PENDIENTE' && (
-                                    <View style={styles.quitar}>
-                                        <Boton titulo="Quitar" variante="secundario" onPress={() => void quitarRecordatorio(r)} pista={`Cancela el recordatorio de ${fechaRecordatorio(r)}`} />
-                                    </View>
-                                )}
-                            </View>
-                        ))}
-
-                        {pendiente && futura && (
-                            <View style={[styles.nuevo, { borderTopColor: colores.borde }]}>
-                                <Texto variante="etiqueta">Agregar un recordatorio</Texto>
-                                <OpcionesFiltro etiqueta="Cuándo avisar" opciones={ANTES} valor={antes} onCambiar={setAntes} />
-                                <Texto variante="etiqueta">Tipo de aviso</Texto>
-                                <ControlSegmentado etiqueta="Tipo de aviso" opciones={TIPOS_AVISO} valor={tipoAviso} onCambiar={setTipoAviso} />
-                                {errorRecordatorio ? (
-                                    <Texto variante="pequeno" color="error" peso="600">
-                                        {errorRecordatorio}
-                                    </Texto>
-                                ) : null}
-                                <Boton titulo="Agregar recordatorio" icono="agregar" variante="secundario" onPress={() => void agregarRecordatorio()} cargando={trabajando} />
-                            </View>
-                        )}
-                    </Tarjeta>
-
-                    {pendiente && (
-                        <View style={styles.botones}>
-                            <Boton titulo="Marcar como realizada" icono="check" onPress={completar} cargando={trabajando} />
-                            <Boton
-                                titulo="Editar"
-                                icono="editar"
-                                variante="secundario"
-                                onPress={() => router.push({ pathname: '/paciente/salud/agenda/editar/[id]', params: { id: String(id) } })}
-                            />
-                            {confirmandoCancelar ? (
-                                <View style={[styles.confirmar, { borderColor: colores.error, backgroundColor: colores.errorFondo }]} accessibilityLiveRegion="polite">
-                                    <Texto variante="etiqueta">¿Seguro que quieres cancelar esta actividad? Sus recordatorios también se cancelan.</Texto>
-                                    <Boton titulo="Sí, cancelar actividad" icono="cancelar" variante="peligro" onPress={cancelar} cargando={trabajando} />
-                                    <Boton titulo="No, conservarla" variante="secundario" onPress={() => setConfirmandoCancelar(false)} />
-                                </View>
-                            ) : (
-                                <Boton
-                                    titulo="Cancelar actividad"
-                                    icono="cancelar"
-                                    variante="secundario"
-                                    onPress={() => {
-                                        setConfirmandoCancelar(true);
-                                        anunciar('¿Seguro que quieres cancelar esta actividad? Toca: sí, cancelar actividad.');
-                                    }}
+                                <OpcionesFiltro
+                                    etiqueta="Síntoma sugerido"
+                                    opciones={sugerenciasVisibles.map((s) => ({ valor: s, titulo: s }))}
+                                    valor={sugerenciasVisibles.find((s) => aPalabras(s) === escrito) ?? ''}
+                                    onCambiar={cambiarTipo}
                                 />
-                            )}
+                            </View>
+                        )}
+                        <SelectorIntensidad
+                            obligatorio
+                            valor={intensidad}
+                            onCambiar={(n) => {
+                                setIntensidad(n);
+                                setErrores((e) => ({ ...e, intensidad: undefined }));
+                            }}
+                            error={errores.intensidad}
+                        />
+                    </Tarjeta>
+
+                    <Tarjeta titulo="Detalles adicionales" icono="reloj">
+                        <View style={styles.sugerencias}>
+                            <Texto variante="etiqueta">¿Cuándo?</Texto>
+                            <OpcionesFiltro etiqueta="Cuándo" opciones={opcionesCuando} valor={opcionCuando} onCambiar={elegirCuando} />
                         </View>
-                    )}
+                        <Campo
+                            etiqueta="Otra fecha y hora"
+                            icono="calendario"
+                            placeholder="Ej: ayer a las 8 pm, o 14/10/2026 09:30"
+                            value={opcionCuando === '__otro' ? cuando : ''}
+                            onChangeText={escribirCuando}
+                            onBlur={() => {
+                                // Al salir del campo se revisa que la fecha y la hora sean reales (por ejemplo, no "25:00")
+                                if (opcionCuando !== '__otro' || !cuando.trim()) return;
+                                const fecha = interpretarCuando(cuando);
+                                if (!fecha)
+                                    setErrores((e) => ({
+                                        ...e,
+                                        cuando: 'La fecha o la hora no son válidas. Ejemplo: ayer a las 8:00 p. m. o 14/10/2026 09:30',
+                                    }));
+                                else if (fecha.getTime() > Date.now() + TOLERANCIA_FUTURO_MS)
+                                    setErrores((e) => ({ ...e, cuando: 'La fecha y hora del síntoma no puede estar en el futuro' }));
+                            }}
+                            error={errores.cuando}
+                            ayuda={ayudaCuando}
+                            returnKeyType="next"
+                            onSubmitEditing={() => observacionesRef.current?.focus()}
+                        />
+                        <Campo
+                            ref={observacionesRef}
+                            etiqueta="Observaciones"
+                            icono="nota"
+                            placeholder="Ej: empezó después del almuerzo"
+                            value={observaciones}
+                            onChangeText={cambiarObservaciones}
+                            error={errores.observaciones}
+                            multiline
+                            maxLength={1000}
+                        />
+                    </Tarjeta>
+
+                    <View style={styles.botones}>
+                        <NotaCamposObligatorios />
+                        <Boton titulo={editando ? 'Guardar cambios' : 'Guardar síntoma'} icono="check" onPress={guardar} cargando={guardando} />
+                        {errorGeneral && <Aviso mensaje={errorGeneral} />}
+                        <Boton titulo="Cancelar" variante="secundario" onPress={volver} />
+                    </View>
                 </>
             )}
         </FondoPantalla>
@@ -351,48 +441,11 @@ export function PantallaDetalleActividad({ id }: { id: number }) {
 }
 
 const styles = StyleSheet.create({
-    aviso: {
-        marginBottom: Espacio.l,
-    },
-    etiquetas: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+    sugerencias: {
         gap: Espacio.s,
-    },
-    chip: {
-        borderRadius: Radio.s,
-        borderWidth: 1.5,
-        paddingHorizontal: Espacio.m,
-        paddingVertical: Espacio.xs,
-    },
-    recordatorio: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Espacio.m,
-        borderWidth: 1.5,
-        borderRadius: Radio.m,
-        padding: Espacio.m,
-    },
-    textos: {
-        flex: 1,
-        gap: 2,
-    },
-    quitar: {
-        minWidth: 96,
-    },
-    nuevo: {
-        gap: Espacio.s,
-        borderTopWidth: 1,
-        paddingTop: Espacio.m,
     },
     botones: {
         gap: Espacio.m,
         marginBottom: Espacio.xl,
-    },
-    confirmar: {
-        gap: Espacio.m,
-        borderWidth: 1.5,
-        borderRadius: Radio.m,
-        padding: Espacio.m,
     },
 });
