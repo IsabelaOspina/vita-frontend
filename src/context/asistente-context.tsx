@@ -197,6 +197,13 @@ type Asistente = {
     /** Al entrar a una pantalla. Con `leer`, lee su descripción y pregunta por el primer dato que falta. */
     registrarPantalla: (ref: RefPantalla, leer: boolean) => void;
     quitarPantalla: (ref: RefPantalla) => void;
+    /** La pantalla que el asistente atiende ahora (para devolvérsela después de un aviso). */
+    pantallaRegistrada: () => RefPantalla | null;
+    /**
+     * Dice un aviso en voz alta aunque el modo voz esté apagado (por ejemplo un recordatorio).
+     * Con el modo voz activo, al terminar queda escuchando la respuesta sin necesidad de "Oye VITA".
+     */
+    avisar: (texto: string) => void;
 };
 
 const AsistenteContext = createContext<Asistente | null>(null);
@@ -907,6 +914,11 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
         },
         quitarPantalla: (ref) => {
             if (pantallaRef.current === ref) pantallaRef.current = null;
+        },
+        pantallaRegistrada: () => pantallaRef.current,
+        avisar: (texto) => {
+            hablar(texto);
+            if (activoRef.current) seguimientoRef.current = true;
         },
     };
 
