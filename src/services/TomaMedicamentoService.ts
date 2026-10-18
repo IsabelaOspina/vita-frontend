@@ -15,30 +15,45 @@ async function obtenerTokenRequerido(): Promise<string> {
   return token;
 }
 
+// Todas las tomas del usuario en un rango (de sus medicamentos y horarios activos), en una sola consulta
+export async function listarTomasEntre(
+    desde: string,
+    hasta: string
+): Promise<TomaMedicamentoResponse[]> {
+  const token = await obtenerTokenRequerido();
+
+  return await apiRequest<TomaMedicamentoResponse[]>(
+      `/api/tomas-medicamento?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`,
+      "GET",
+      undefined,
+      token
+  );
+}
+
 // Avisar que el celular ya mostró la notificación de la toma
 export async function marcarTomaNotificada(
-  id: number
+    id: number
 ): Promise<TomaMedicamentoResponse> {
   const token = await obtenerTokenRequerido();
 
   return await apiRequest<TomaMedicamentoResponse>(
-    `/api/tomas-medicamento/${id}/notificado`,
-    "PATCH",
-    undefined,
-    token
+      `/api/tomas-medicamento/${id}/notificado`,
+      "PATCH",
+      undefined,
+      token
   );
 }
 
 // El usuario confirmó que se tomó el medicamento
 export async function marcarTomaTomada(
-  id: number
+    id: number
 ): Promise<TomaMedicamentoResponse> {
   const token = await obtenerTokenRequerido();
 
   return await apiRequest<TomaMedicamentoResponse>(
-    `/api/tomas-medicamento/${id}/tomado`,
-    "PATCH",
-    undefined,
-    token
+      `/api/tomas-medicamento/${id}/tomado`,
+      "PATCH",
+      undefined,
+      token
   );
 }

@@ -191,24 +191,24 @@ export function PantallaDetalleMedicamento({ id }: { id: number }) {
             { frases: ['lee el medicamento', 'leer', 'lee', 'detalle', 'que dice'], etiqueta: 'leer el medicamento', ejecutar: () => anunciar(medicamento ? lectura(medicamento, horarios) : 'Todavía estoy cargando el medicamento.') },
             ...(activo
                 ? [
-                      {
-                          frases: ['ya me lo tome', 'ya me la tome', 'ya lo tome', 'me lo tome', 'marcar como tomado'],
-                          etiqueta: 'registrar la toma pendiente',
-                          ejecutar: () => {
-                              const toma = marcables[marcables.length - 1];
-                              if (toma) void marcar(toma);
-                              else anunciar('No tienes tomas pendientes de este medicamento hasta hoy.');
-                          },
-                      },
-                      { frases: ['agregar horario', 'nuevo horario', 'agrega un horario', 'programar', 'programa'], etiqueta: 'agregar un horario', ejecutar: nuevoHorario },
-                      { frases: ['editar', 'edita', 'cambiar', 'modificar'], etiqueta: 'editar el medicamento', ejecutar: editar },
-                      {
-                          frases: ['desactivar', 'desactiva', 'ya no lo tomo', 'eliminar', 'elimina', 'borrar'],
-                          etiqueta: 'desactivar el medicamento',
-                          confirmar: '¿Seguro que quieres desactivar este medicamento? Ya no recibirás sus avisos.',
-                          ejecutar: () => void desactivar(),
-                      },
-                  ]
+                    {
+                        frases: ['ya me lo tome', 'ya me la tome', 'ya lo tome', 'me lo tome', 'marcar como tomado'],
+                        etiqueta: 'registrar la toma pendiente',
+                        ejecutar: () => {
+                            const toma = marcables[marcables.length - 1];
+                            if (toma) void marcar(toma);
+                            else anunciar('No tienes tomas pendientes de este medicamento hasta hoy.');
+                        },
+                    },
+                    { frases: ['agregar horario', 'nuevo horario', 'agrega un horario', 'programar', 'programa'], etiqueta: 'agregar un horario', ejecutar: nuevoHorario },
+                    { frases: ['editar', 'edita', 'cambiar', 'modificar'], etiqueta: 'editar el medicamento', ejecutar: editar },
+                    {
+                        frases: ['desactivar', 'desactiva', 'ya no lo tomo', 'eliminar', 'elimina', 'borrar'],
+                        etiqueta: 'desactivar el medicamento',
+                        confirmar: '¿Seguro que quieres desactivar este medicamento? Ya no recibirás sus avisos.',
+                        ejecutar: () => void desactivar(),
+                    },
+                ]
                 : []),
             { frases: ['volver', 'atras', 'regresar', 'mis medicamentos'], ejecutar: volver },
             ...accionesComunesVoz('USUARIO', anunciar),
@@ -325,7 +325,6 @@ export function PantallaDetalleMedicamento({ id }: { id: number }) {
                     <Tarjeta titulo="Datos" icono="info">
                         <FilaDato etiqueta="Nombre" valor={medicamento.nombre} icono="medicamento" />
                         {medicamento.dosis ? <FilaDato etiqueta="Dosis" valor={medicamento.dosis} icono="info" /> : null}
-                        {medicamento.frecuencia ? <FilaDato etiqueta="Frecuencia indicada" valor={medicamento.frecuencia} icono="reloj" /> : null}
                         {medicamento.viaAdministracion ? <FilaDato etiqueta="Vía" valor={medicamento.viaAdministracion} icono="nota" /> : null}
                     </Tarjeta>
 

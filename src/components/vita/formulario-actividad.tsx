@@ -43,18 +43,20 @@ import { Texto } from './texto';
 
 type Errores = Partial<Record<'nombre' | 'tipo' | 'fecha' | 'hora' | 'ubicacion' | 'descripcion' | 'recordatorio', string>>;
 
-/** Cuánto antes de la actividad llega el recordatorio (en minutos). "" = sin recordatorio. */
+/** Cuánto antes de la actividad llega el recordatorio (en minutos). "" = sin recordatorio, "0" = a la misma hora. */
 const RECORDATORIOS = [
     { valor: '', titulo: 'Sin recordatorio' },
+    { valor: '0', titulo: 'A la hora de la actividad' },
     { valor: '30', titulo: '30 minutos antes' },
     { valor: '60', titulo: '1 hora antes' },
     { valor: '1440', titulo: '1 día antes' },
 ];
 
-/** "una hora antes", "un día antes", "media hora antes", "no" → minutos. */
+/** "una hora antes", "un día antes", "media hora antes", "a la misma hora", "no" → minutos. */
 function interpretarRecordatorio(texto: string): string | null {
     const t = aPalabras(texto);
     if (/^(no|ninguno|sin recordatorio|no quiero)$/.test(t)) return '';
+    if (/(misma hora|a la hora|en el momento|cuando empiece|cuando sea la hora|a tiempo)/.test(t)) return '0';
     if (/(media hora|30 minutos|treinta minutos)/.test(t)) return '30';
     if (/(una hora|1 hora)/.test(t)) return '60';
     if (/(un dia|1 dia|el dia antes|dia antes)/.test(t)) return '1440';
@@ -77,7 +79,7 @@ const OPCIONES_FECHA = () => {
 /**
  * Crear o editar una actividad de salud (cita médica, terapia u otra).
  * Obligatorios: nombre, tipo, fecha y hora (en el futuro, como exige el backend).
- * Al crearla se puede programar de una vez un recordatorio (30 minutos, 1 hora o 1 día antes).
+ * Al crearla se puede programar de una vez un recordatorio (a la misma hora, 30 minutos, 1 hora o 1 día antes).
  * Por voz: "control con medicina general mañana a las 9 en el hospital San Juan".
  */
 export function FormularioActividad({ id }: { id?: number }) {
@@ -313,7 +315,7 @@ export function FormularioActividad({ id }: { id?: number }) {
     const campoRecordatorio: CampoVoz = {
         claves: ['recordatorio', 'recuerdame', 'avisame', 'aviso'],
         etiqueta: 'Recordatorio',
-        pregunta: '¿Cuándo te lo recuerdo? Puedes decir: 30 minutos antes, una hora antes o un día antes.',
+        pregunta: '¿Cuándo te lo recuerdo? Puedes decir: a la misma hora, 30 minutos antes, una hora antes o un día antes.',
         tipo: 'texto',
         valor: RECORDATORIOS.find((r) => r.valor === recordatorio && r.valor)?.titulo ?? '',
         asignar: (v) => {
@@ -321,7 +323,7 @@ export function FormularioActividad({ id }: { id?: number }) {
             if (r !== null) {
                 setRecordatorio(r);
                 quitarError('recordatorio');
-            } else setErrores((e) => ({ ...e, recordatorio: 'Di: 30 minutos antes, una hora antes o un día antes' }));
+            } else setErrores((e) => ({ ...e, recordatorio: 'Di: a la misma hora, 30 minutos antes, una hora antes o un día antes' }));
         },
         opcional: true,
     };
@@ -375,8 +377,8 @@ export function FormularioActividad({ id }: { id?: number }) {
             ? `Se guardará: ${diaLargo(fechaEscrita)}`
             : undefined
         : fecha
-          ? `Día elegido: ${diaLargo(fecha)}`
-          : 'Elige un día o escríbelo.';
+            ? `Día elegido: ${diaLargo(fecha)}`
+            : 'Elige un día o escríbelo.';
     const ayudaHora = hora && fechaFinal ? `Se guardará: ${nombreDiaRelativo(fechaFinal).toLowerCase()} a las ${horaCorta(unirFechaHora(fechaFinal, hora))}` : undefined;
 
     return (

@@ -41,7 +41,7 @@ export function separarMedicamento(texto: string): { nombre: string; dosis?: str
 /** Un medicamento de la lista. */
 function ElementoMedicamento({ medicamento, numero, onPress }: { medicamento: MedicamentoResponse; numero: number; onPress: () => void }) {
     const { colores } = useAccesibilidad();
-    const detalle = [medicamento.dosis, medicamento.viaAdministracion, medicamento.frecuencia].filter(Boolean).join(' · ');
+    const detalle = [medicamento.dosis, medicamento.viaAdministracion].filter(Boolean).join(' · ');
     return (
         <Pressable
             onPress={onPress}

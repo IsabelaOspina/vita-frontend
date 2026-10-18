@@ -23,15 +23,15 @@ import { separarMedicamento } from './pantalla-medicamentos';
 import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
 
-type Errores = Partial<Record<'nombre' | 'dosis' | 'frecuencia' | 'via', string>>;
+type Errores = Partial<Record<'nombre' | 'dosis' | 'via', string>>;
 
 const VIAS = ['Oral', 'Sublingual', 'Inyectada', 'Inhalada', 'Tópica', 'Gotas'];
 
 const sinNada = (v: string) => /^(no|ninguna|ninguno|nada)$/.test(aPalabras(v));
 
 /**
- * Registrar o editar un medicamento. Solo el nombre es obligatorio; dosis, frecuencia (en
- * palabras) y vía son datos de apoyo. Los horarios se agregan después, en el detalle.
+ * Registrar o editar un medicamento. Solo el nombre es obligatorio; dosis y vía son datos de apoyo.
+ * Cada cuánto se toma no va aquí: se define en cada horario (en el detalle del medicamento).
  */
 export function FormularioMedicamento({ id }: { id?: number }) {
     const editando = id !== undefined;
@@ -40,7 +40,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
 
     const [nombre, setNombre] = useState(editando ? '' : (inicial.nombre ?? ''));
     const [dosis, setDosis] = useState(editando ? '' : (inicial.dosis ?? ''));
-    const [frecuencia, setFrecuencia] = useState('');
     const [via, setVia] = useState('');
     const [cargandoDatos, setCargandoDatos] = useState(editando);
     const [errorCarga, setErrorCarga] = useState<string | null>(null);
@@ -58,7 +57,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
             const m = await obtenerMedicamento(id);
             setNombre(m.nombre);
             setDosis(m.dosis ?? '');
-            setFrecuencia(m.frecuencia ?? '');
             setVia(m.viaAdministracion ?? '');
         } catch (e) {
             setErrorCarga(mensajeDeError(e, 'No pudimos cargar el medicamento.'));
@@ -79,7 +77,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
         if (!nombre.trim()) e.nombre = 'Escribe el nombre del medicamento';
         else if (nombre.trim().length > 150) e.nombre = 'El nombre no puede superar 150 caracteres';
         if (dosis.trim().length > 100) e.dosis = 'La dosis no puede superar 100 caracteres';
-        if (frecuencia.trim().length > 120) e.frecuencia = 'La frecuencia no puede superar 120 caracteres';
         if (via.trim().length > 100) e.via = 'La vía de administración no puede superar 100 caracteres';
         setErrores(e);
         setErrorGeneral(null);
@@ -90,7 +87,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
         const datos = {
             nombre: nombre.trim(),
             dosis: dosis.trim() || null,
-            frecuencia: frecuencia.trim() || null,
             viaAdministracion: via.trim() || null,
         };
         setGuardando(true);
@@ -113,7 +109,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
             const campo = campoDelError<keyof Errores>(mensaje, [
                 [/nombre/i, 'nombre'],
                 [/dosis/i, 'dosis'],
-                [/frecuencia/i, 'frecuencia'],
                 [/v[ií]a/i, 'via'],
             ]);
             if (campo) setErrores({ [campo]: mensaje });
@@ -146,15 +141,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
         asignar: (v) => setDosis(sinNada(v) ? '' : separarMedicamento(`x ${v}`).dosis ?? v),
         opcional: true,
     };
-    const campoFrecuencia: CampoVoz = {
-        claves: ['frecuencia', 'cada cuanto', 'indicacion', 'indicaciones'],
-        etiqueta: 'Frecuencia',
-        pregunta: '¿Cada cuánto te lo indicaron? Por ejemplo: cada 8 horas con las comidas.',
-        tipo: 'texto',
-        valor: frecuencia,
-        asignar: (v) => setFrecuencia(sinNada(v) ? '' : v.charAt(0).toUpperCase() + v.slice(1)),
-        opcional: true,
-    };
     const campoVia: CampoVoz = {
         claves: ['via', 'via de administracion', 'como se toma', 'como lo tomo'],
         etiqueta: 'Vía',
@@ -172,9 +158,9 @@ export function FormularioMedicamento({ id }: { id?: number }) {
         descripcion: editando
             ? 'Editar medicamento. Dime qué quieres cambiar, por ejemplo: la dosis es 100 miligramos, y luego di: guardar.'
             : 'Nuevo medicamento. Dime el nombre y la dosis, por ejemplo: losartán 50 miligramos.',
-        ejemplos: ['losartán 50 miligramos', 'la vía es oral', 'la frecuencia es cada 12 horas', 'guardar'],
-        campos: editando && cargandoDatos ? [] : [campoNombre, campoDosis, campoFrecuencia, campoVia],
-        pasosOpcionales: editando ? [] : [{ pregunta: 'Responde sí o no: ¿quieres agregar la dosis, la frecuencia o la vía?', campos: ['Dosis', 'Frecuencia', 'Vía'] }],
+        ejemplos: ['losartán 50 miligramos', 'la dosis es una tableta', 'la vía es oral', 'guardar'],
+        campos: editando && cargandoDatos ? [] : [campoNombre, campoDosis, campoVia],
+        pasosOpcionales: editando ? [] : [{ pregunta: 'Responde sí o no: ¿quieres agregar la dosis o la vía?', campos: ['Dosis', 'Vía'] }],
         acciones: [
             { frases: ['guardar', 'guarda', 'guardalo', 'listo', 'registrar', 'terminar'], etiqueta: editando ? 'guardar los cambios' : 'guardar el medicamento', ejecutar: () => void guardar() },
             { frases: ['volver', 'atras', 'regresar', 'cancelar', 'no guardar'], ejecutar: volver },
@@ -184,7 +170,7 @@ export function FormularioMedicamento({ id }: { id?: number }) {
 
     return (
         <FondoPantalla>
-            <Encabezado volver alVolver={volver} icono="medicamento" titulo={titulo} subtitulo="Los horarios se agregan después, en el medicamento." />
+            <Encabezado volver alVolver={volver} icono="medicamento" titulo={titulo} subtitulo="Cada cuánto lo tomas se define después, en los horarios del medicamento." />
 
             {editando && cargandoDatos ? (
                 <EstadoCarga cargando={cargandoDatos} error={errorCarga} reintentar={cargar} hayDatos={false} />
@@ -219,19 +205,6 @@ export function FormularioMedicamento({ id }: { id?: number }) {
                     </Tarjeta>
 
                     <Tarjeta titulo="Detalles adicionales" icono="nota">
-                        <Campo
-                            etiqueta="Frecuencia indicada"
-                            icono="reloj"
-                            placeholder="Ej: Cada 12 horas con las comidas"
-                            ayuda="Como te lo indicó el médico. Los avisos se programan en «Horarios»."
-                            value={frecuencia}
-                            onChangeText={(v) => {
-                                setFrecuencia(v);
-                                quitarError('frecuencia');
-                            }}
-                            error={errores.frecuencia}
-                            maxLength={120}
-                        />
                         <View style={styles.grupo}>
                             <Texto variante="etiqueta">Vía de administración</Texto>
                             <OpcionesFiltro

@@ -31,6 +31,7 @@ import { Texto } from './texto';
 
 /** Cuánto antes llega un recordatorio nuevo (minutos). */
 const ANTES = [
+    { valor: '0', titulo: 'A la hora de la actividad' },
     { valor: '30', titulo: '30 minutos antes' },
     { valor: '60', titulo: '1 hora antes' },
     { valor: '1440', titulo: '1 día antes' },
@@ -186,7 +187,7 @@ export function PantallaDetalleActividad({ id }: { id: number }) {
         cargando: cargando,
         titulo: 'Detalle de la actividad',
         descripcion: pendiente
-            ? 'Detalle de la actividad. Puedes decir: lee la actividad, recuérdamelo una hora antes, marcar como realizada, editar o cancelar la actividad.'
+            ? 'Detalle de la actividad. Puedes decir: lee la actividad, recuérdamelo una hora antes o recuérdamelo a la misma hora, marcar como realizada, editar o cancelar la actividad.'
             : 'Detalle de la actividad. Puedes decir: lee la actividad o volver.',
         ejemplos: ['lee la actividad', 'recuérdamelo una hora antes', 'lee los recordatorios', 'marcar como realizada', 'editar', 'cancelar la actividad'],
         campos: [],
@@ -210,19 +211,19 @@ export function PantallaDetalleActividad({ id }: { id: number }) {
             { frases: ['lee la actividad', 'leer', 'lee', 'detalle', 'que dice'], etiqueta: 'leer la actividad', ejecutar: () => anunciar(actividad ? lectura(actividad) : 'Todavía estoy cargando la actividad.') },
             ...(pendiente
                 ? [
-                      {
-                          frases: ['marcar como realizada', 'marca como realizada', 'ya fui', 'ya la hice', 'completar', 'realizada', 'completada'],
-                          etiqueta: 'marcar como realizada',
-                          ejecutar: () => void completar(),
-                      },
-                      { frases: ['editar', 'edita', 'cambiar', 'cambia', 'modificar'], etiqueta: 'editar la actividad', ejecutar: () => router.push({ pathname: '/paciente/salud/agenda/editar/[id]', params: { id: String(id) } }) },
-                      {
-                          frases: ['cancelar la actividad', 'cancela la actividad', 'cancelar la cita', 'cancela la cita', 'ya no voy', 'eliminar', 'elimina'],
-                          etiqueta: 'cancelar la actividad',
-                          confirmar: '¿Seguro que quieres cancelar esta actividad? Sus recordatorios también se cancelan.',
-                          ejecutar: () => void cancelar(),
-                      },
-                  ]
+                    {
+                        frases: ['marcar como realizada', 'marca como realizada', 'ya fui', 'ya la hice', 'completar', 'realizada', 'completada'],
+                        etiqueta: 'marcar como realizada',
+                        ejecutar: () => void completar(),
+                    },
+                    { frases: ['editar', 'edita', 'cambiar', 'cambia', 'modificar'], etiqueta: 'editar la actividad', ejecutar: () => router.push({ pathname: '/paciente/salud/agenda/editar/[id]', params: { id: String(id) } }) },
+                    {
+                        frases: ['cancelar la actividad', 'cancela la actividad', 'cancelar la cita', 'cancela la cita', 'ya no voy', 'eliminar', 'elimina'],
+                        etiqueta: 'cancelar la actividad',
+                        confirmar: '¿Seguro que quieres cancelar esta actividad? Sus recordatorios también se cancelan.',
+                        ejecutar: () => void cancelar(),
+                    },
+                ]
                 : []),
             { frases: ['volver', 'atras', 'regresar', 'agenda'], ejecutar: volver },
             ...accionesComunesVoz('USUARIO', anunciar),
@@ -230,7 +231,15 @@ export function PantallaDetalleActividad({ id }: { id: number }) {
         dictado: (texto) => {
             const t = aPalabras(texto);
             if (!pendiente || !/^(recuerdame|recuerdamelo|avisame|ponme un recordatorio|agrega un recordatorio)/.test(t)) return null;
-            const minutos = /(media hora|30 minutos|treinta minutos)/.test(t) ? '30' : /(un dia|1 dia|dia antes)/.test(t) ? '1440' : /(una hora|1 hora)/.test(t) ? '60' : null;
+            const minutos = /(misma hora|a la hora|en el momento|cuando empiece|cuando sea la hora|a tiempo)/.test(t)
+                ? '0'
+                : /(media hora|30 minutos|treinta minutos)/.test(t)
+                    ? '30'
+                    : /(un dia|1 dia|dia antes)/.test(t)
+                        ? '1440'
+                        : /(una hora|1 hora)/.test(t)
+                            ? '60'
+                            : null;
             if (!minutos) return null;
             return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => void agregarRecordatorio(minutos) } }];
         },
