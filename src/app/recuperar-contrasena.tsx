@@ -77,14 +77,16 @@ export default function RecuperarContrasenaScreen() {
         setCargando(true);
         try {
             await solicitarCodigoRecuperacion({ correo: correo.trim() });
-            const mensaje = `Si el correo está registrado, te enviamos un código de 6 dígitos a ${correo.trim()}. El código vence en 15 minutos.`;
+            const mensaje = `Te enviamos un código de 6 dígitos a ${correo.trim()}. El código vence en 15 minutos.`;
             setAviso({ tipo: 'info', mensaje });
             setPaso('codigo');
             setEspera(ESPERA_REENVIO_S);
             anunciar(`${mensaje} Ahora escribe el código y tu nueva contraseña.`);
         } catch (e) {
             const mensaje = mensajeDeError(e, 'No pudimos enviar el código.');
-            if (/correo/i.test(mensaje)) setErrores({ correo: mensaje });
+            // "no está registrado" o "cuenta inactiva" van debajo del campo de correo (si se está viendo);
+            // lo demás (por ejemplo, esperar un minuto para pedir otro código) va en el aviso de arriba
+            if (paso === 'correo' && /registrad|inactiva/i.test(mensaje)) setErrores({ correo: mensaje });
             else setAviso({ tipo: 'error', mensaje });
             anunciar(mensaje);
         } finally {
@@ -140,81 +142,81 @@ export default function RecuperarContrasenaScreen() {
     useComandosPantalla(
         paso === 'correo'
             ? {
-                  titulo: 'Recuperar contraseña',
-                  descripcion:
-                      'Recuperar contraseña. Escribe el correo con el que te registraste y te enviaremos un código de 6 dígitos para crear una nueva contraseña.',
-                  ejemplos: ['mi correo es maria arroba gmail punto com', 'enviar código', 'volver'],
-                  campos: [
-                      {
-                          claves: ['correo electronico', 'correo', 'email', 'mail'],
-                          etiqueta: 'Correo electrónico',
-                          pregunta: '¿Cuál es el correo con el que te registraste?',
-                          tipo: 'correo',
-                          valor: correo,
-                          asignar: (v) => {
-                              setCorreo(v);
-                              quitarError('correo');
-                          },
-                      },
-                  ],
-                  acciones: [
-                      {
-                          frases: ['enviar codigo', 'enviar', 'pedir codigo', 'continuar', 'siguiente'],
-                          etiqueta: 'enviar el código',
-                          ejecutar: () => void pedirCodigo(),
-                      },
-                      { frases: ['volver', 'atras', 'regresar', 'iniciar sesion'], ejecutar: volver },
-                  ],
-              }
+                titulo: 'Recuperar contraseña',
+                descripcion:
+                    'Recuperar contraseña. Escribe el correo con el que te registraste y te enviaremos un código de 6 dígitos para crear una nueva contraseña.',
+                ejemplos: ['mi correo es maria arroba gmail punto com', 'enviar código', 'volver'],
+                campos: [
+                    {
+                        claves: ['correo electronico', 'correo', 'email', 'mail'],
+                        etiqueta: 'Correo electrónico',
+                        pregunta: '¿Cuál es el correo con el que te registraste?',
+                        tipo: 'correo',
+                        valor: correo,
+                        asignar: (v) => {
+                            setCorreo(v);
+                            quitarError('correo');
+                        },
+                    },
+                ],
+                acciones: [
+                    {
+                        frases: ['enviar codigo', 'enviar', 'pedir codigo', 'continuar', 'siguiente'],
+                        etiqueta: 'enviar el código',
+                        ejecutar: () => void pedirCodigo(),
+                    },
+                    { frases: ['volver', 'atras', 'regresar', 'iniciar sesion'], ejecutar: volver },
+                ],
+            }
             : {
-                  titulo: 'Nueva contraseña',
-                  descripcion: `Nueva contraseña. Escribe el código de 6 dígitos que enviamos a ${correo.trim()}, tu nueva contraseña y repítela para confirmarla.`,
-                  ejemplos: ['el código es 4 8 2 9 1 5', 'la nueva contraseña es …', 'guardar', 'reenviar código'],
-                  campos: [
-                      {
-                          claves: ['codigo de verificacion', 'codigo', 'el codigo'],
-                          etiqueta: 'Código',
-                          pregunta: '¿Cuál es el código de 6 dígitos que llegó a tu correo?',
-                          tipo: 'numero',
-                          valor: codigo,
-                          asignar: (v) => {
-                              setCodigo(v.replace(/\D/g, '').slice(0, 6));
-                              quitarError('codigo');
-                          },
-                      },
-                      {
-                          claves: ['nueva contrasena', 'contrasena nueva', 'clave nueva', 'nueva clave', 'contrasena', 'nueva'],
-                          etiqueta: 'Nueva contraseña',
-                          pregunta: '¿Cuál quieres que sea tu nueva contraseña? Debe tener al menos 8 caracteres.',
-                          tipo: 'contrasena',
-                          valor: nueva,
-                          asignar: (v) => {
-                              setNueva(v);
-                              quitarError('nueva');
-                          },
-                      },
-                      {
-                          claves: ['confirmar contrasena', 'confirmacion', 'confirma', 'repite la nueva', 'repetir contrasena', 'otra vez la nueva'],
-                          etiqueta: 'Confirmar contraseña',
-                          pregunta: 'Repite la nueva contraseña para confirmarla.',
-                          tipo: 'contrasena',
-                          valor: confirmacion,
-                          asignar: (v) => {
-                              setConfirmacion(v);
-                              quitarError('confirmacion');
-                          },
-                      },
-                  ],
-                  acciones: [
-                      {
-                          frases: ['guardar', 'restablecer', 'cambiar contrasena', 'listo', 'confirmar'],
-                          etiqueta: 'guardar la nueva contraseña',
-                          ejecutar: () => void restablecer(),
-                      },
-                      { frases: ['reenviar codigo', 'reenviar', 'otro codigo', 'no me llego'], ejecutar: () => void reenviar() },
-                      { frases: ['cambiar correo', 'otro correo', 'volver', 'atras', 'regresar'], ejecutar: volver },
-                  ],
-              },
+                titulo: 'Nueva contraseña',
+                descripcion: `Nueva contraseña. Escribe el código de 6 dígitos que enviamos a ${correo.trim()}, tu nueva contraseña y repítela para confirmarla.`,
+                ejemplos: ['el código es 4 8 2 9 1 5', 'la nueva contraseña es …', 'guardar', 'reenviar código'],
+                campos: [
+                    {
+                        claves: ['codigo de verificacion', 'codigo', 'el codigo'],
+                        etiqueta: 'Código',
+                        pregunta: '¿Cuál es el código de 6 dígitos que llegó a tu correo?',
+                        tipo: 'numero',
+                        valor: codigo,
+                        asignar: (v) => {
+                            setCodigo(v.replace(/\D/g, '').slice(0, 6));
+                            quitarError('codigo');
+                        },
+                    },
+                    {
+                        claves: ['nueva contrasena', 'contrasena nueva', 'clave nueva', 'nueva clave', 'contrasena', 'nueva'],
+                        etiqueta: 'Nueva contraseña',
+                        pregunta: '¿Cuál quieres que sea tu nueva contraseña? Debe tener al menos 8 caracteres.',
+                        tipo: 'contrasena',
+                        valor: nueva,
+                        asignar: (v) => {
+                            setNueva(v);
+                            quitarError('nueva');
+                        },
+                    },
+                    {
+                        claves: ['confirmar contrasena', 'confirmacion', 'confirma', 'repite la nueva', 'repetir contrasena', 'otra vez la nueva'],
+                        etiqueta: 'Confirmar contraseña',
+                        pregunta: 'Repite la nueva contraseña para confirmarla.',
+                        tipo: 'contrasena',
+                        valor: confirmacion,
+                        asignar: (v) => {
+                            setConfirmacion(v);
+                            quitarError('confirmacion');
+                        },
+                    },
+                ],
+                acciones: [
+                    {
+                        frases: ['guardar', 'restablecer', 'cambiar contrasena', 'listo', 'confirmar'],
+                        etiqueta: 'guardar la nueva contraseña',
+                        ejecutar: () => void restablecer(),
+                    },
+                    { frases: ['reenviar codigo', 'reenviar', 'otro codigo', 'no me llego'], ejecutar: () => void reenviar() },
+                    { frases: ['cambiar correo', 'otro correo', 'volver', 'atras', 'regresar'], ejecutar: volver },
+                ],
+            },
     );
 
     return (
