@@ -1,3 +1,4 @@
+import { StackActions } from 'expo-router/react-navigation';
 import { Tabs } from 'expo-router/tabs';
 import type { ComponentProps, ReactNode } from 'react';
 
@@ -8,6 +9,9 @@ import { Icono, type NombreIcono } from './icono';
 /**
  * Barra de pestañas de VITA (abajo de la pantalla), con los colores del tema y el tamaño
  * de texto de accesibilidad. Cada rol arma la suya con <Pestana /> en su _layout.
+ *
+ * Al tocar una pestaña siempre se llega a su pantalla principal: si dentro de ella se había entrado
+ * a otras pantallas (por ejemplo Mi salud → Medicamentos → Losartán), se vuelve al inicio de la sección.
  */
 export function Pestanas({ children }: { children: ReactNode }) {
     const { colores, tamano, altoContraste } = useAccesibilidad();
@@ -16,6 +20,16 @@ export function Pestanas({ children }: { children: ReactNode }) {
         <Tabs
             // "Volver" regresa a la pestaña anterior, no siempre a la primera
             backBehavior="history"
+            screenListeners={({ navigation, route }) => ({
+                tabPress: () => {
+                    const pestanaTocada = navigation.getState()?.routes.find((r: { key: string }) => r.key === route.key);
+                    const interna = pestanaTocada?.state;
+                    // La pestaña tiene pantallas apiladas encima de la principal: se quitan todas
+                    if (interna?.key && (interna.index ?? 0) > 0) {
+                        navigation.dispatch({ ...StackActions.popToTop(), target: interna.key });
+                    }
+                },
+            })}
             screenOptions={{
                 headerShown: false,
                 sceneStyle: { backgroundColor: colores.fondo },

@@ -1,3 +1,5 @@
+import { datosCambiaron } from "../utils/cambios-de-datos";
+
 export class ApiError extends Error {
   status: number;
 
@@ -59,6 +61,11 @@ export async function apiRequest<T>(
     throw e;
   } finally {
     clearTimeout(temporizador);
+  }
+
+  // Algo cambió en el backend: el vigilante vuelve a programar los avisos del celular de inmediato
+  if (respuesta.ok && method !== "GET") {
+    datosCambiaron();
   }
 
   if (respuesta.status === 204) {

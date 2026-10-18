@@ -8,6 +8,7 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useAsistente } from '@/context/asistente-context';
 import type { RecordatorioResponse } from '@/dto/RecordatorioResponse';
 import { confirmarRecordatorio, listarAgendaRecordatorios, marcarRecordatorioEnviado } from '@/services/recordatorioService';
+import { alCambiarDatos } from '@/utils/cambios-de-datos';
 import { aFechaHoraLocal, deFechaLocal, horaCorta } from '@/utils/fechas';
 import type { PantallaVoz } from '@/utils/comandos-voz';
 
@@ -74,7 +75,7 @@ const PREFIJO = 'vita-recordatorio-';
 const CANAL_SONIDO = 'vita-recordatorios';
 const CANAL_VISUAL = 'vita-recordatorios-visual';
 /** Si cambia la forma de programar, las notificaciones de versiones anteriores se vuelven a programar. */
-const VERSION_PROGRAMACION = 2;
+const VERSION_PROGRAMACION = 3;
 /** Cada cuánto se consulta la agenda de recordatorios al backend. */
 const CONSULTA_MS = 30_000;
 /** Cada cuánto se revisa si ya llegó la hora de alguno (con lo último que se consultó). */
@@ -160,7 +161,8 @@ async function sincronizarNotificaciones(proximos: RecordatorioResponse[]) {
                 await notificaciones.scheduleNotificationAsync({
                     identifier: identificador,
                     content: {
-                        title: 'VITA · Recordatorio',
+                        // Las tomas de medicamentos llegan igual que los recordatorios de actividades
+                        title: r.tomaMedicamentoId ? 'VITA · Hora de tu medicamento' : 'VITA · Recordatorio',
                         body: r.mensaje,
                         // Con la app cerrada no se puede hablar: el aviso de voz suena como el de sonido
                         sound: visual ? false : 'default',
@@ -178,6 +180,16 @@ async function sincronizarNotificaciones(proximos: RecordatorioResponse[]) {
         }
     } catch {
         // Si el celular no deja programar, los avisos siguen funcionando dentro de la app
+    }
+}
+
+/** Si VITA tiene permiso para mostrar notificaciones en este celular. */
+export async function permisoDeAvisos(): Promise<'concedido' | 'negado' | 'no-disponible'> {
+    if (!notificaciones) return 'no-disponible';
+    try {
+        return (await notificaciones.getPermissionsAsync()).granted ? 'concedido' : 'negado';
+    } catch {
+        return 'no-disponible';
     }
 }
 
@@ -301,8 +313,31 @@ export function VigilanteRecordatorios() {
         }
     }, [encolar]);
 
+    // Evita que dos consultas reprogramen las notificaciones al mismo tiempo: si llega otra mientras
+    // una está en curso, se repite una vez al terminar
+    const enCursoRef = useRef(false);
+    const repetirRef = useRef(false);
+
     /** Trae la agenda del backend y reprograma las notificaciones del celular. */
-    const consultar = useCallback(async () => {
+    const consultar = useCallback(async (): Promise<void> => {
+        if (enCursoRef.current) {
+            repetirRef.current = true;
+            return;
+        }
+        enCursoRef.current = true;
+        try {
+            await consultarAhora();
+        } finally {
+            enCursoRef.current = false;
+        }
+        if (repetirRef.current) {
+            repetirRef.current = false;
+            await consultar();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const consultarAhora = async () => {
         const ahora = new Date();
         const desde = new Date(ahora.getTime() - ATRASO_MAXIMO_MS);
         const hasta = new Date(ahora.getTime() + DIAS_PROGRAMADOS * 24 * 60 * 60_000);
@@ -311,7 +346,10 @@ export function VigilanteRecordatorios() {
             agendaRef.current = agenda;
             revisar();
             if (notificaciones) {
+                // La primera vez se pide el permiso; si lo negaron, solo se revisa (sin volver a preguntar)
+                // por si la persona lo activó después en los ajustes del celular
                 if (permisoRef.current === null) permisoRef.current = await prepararNotificaciones();
+                else if (!permisoRef.current) permisoRef.current = (await permisoDeAvisos()) === 'concedido';
                 if (permisoRef.current) {
                     const proximos = agenda.filter((r) => r.estado === 'PENDIENTE' && deFechaLocal(r.fechaHora).getTime() > Date.now());
                     await sincronizarNotificaciones(proximos);
@@ -320,20 +358,24 @@ export function VigilanteRecordatorios() {
         } catch {
             // Sin conexión o sesión vencida: se intenta de nuevo en la próxima consulta
         }
-    }, [revisar]);
+    };
 
-    // Consulta al entrar, cada 30 segundos y cada vez que la app vuelve a primer plano
+    // Consulta al entrar, cada 30 segundos, cada vez que la app vuelve a primer plano o pasa a segundo
+    // plano, y en cuanto se crea, edita o cancela algo (para que el aviso quede programado en el celular
+    // aunque la persona cierre VITA enseguida)
     useEffect(() => {
         void consultar();
         const consulta = setInterval(() => void consultar(), CONSULTA_MS);
         const revision = setInterval(revisar, REVISION_MS);
         const estado = AppState.addEventListener('change', (e) => {
-            if (e === 'active') void consultar();
+            if (e === 'active' || e === 'background') void consultar();
         });
+        const quitarOyente = alCambiarDatos(() => void consultar());
         return () => {
             clearInterval(consulta);
             clearInterval(revision);
             estado.remove();
+            quitarOyente();
         };
     }, [consultar, revisar]);
 

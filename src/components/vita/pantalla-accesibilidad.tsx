@@ -1,4 +1,4 @@
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 
 import { Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
@@ -10,6 +10,7 @@ import { BarraAccesibilidad } from './barra-accesibilidad';
 import { Encabezado } from './encabezado';
 import { FondoPantalla } from './fondo-pantalla';
 import { Icono, type NombreIcono } from './icono';
+import { abrirAjustesDelCelular, TarjetaAvisosBloqueados, useAvisosBloqueados } from './tarjeta-avisos-celular';
 import { Tarjeta } from './tarjeta';
 import { Texto } from './texto';
 
@@ -31,15 +32,21 @@ const EXPLICACIONES: { icono: NombreIcono; titulo: string; texto: string }[] = [
     },
 ];
 
-/** Pestaña "Accesibilidad" (igual para todos los roles): modo voz, alto contraste y tamaño de texto. */
+/**
+ * Pestaña "Accesibilidad" (igual para todos los roles): modo voz, alto contraste y tamaño de texto.
+ * Al paciente, en el celular, le avisa si las notificaciones de VITA están desactivadas (sin ellas
+ * los recordatorios no llegan con la app cerrada).
+ */
 export function PantallaAccesibilidad({ rol }: { rol: Rol }) {
     const { colores, anunciar, modoVoz, altoContraste, escalaTexto } = useAccesibilidad();
+    const avisosBloqueados = useAvisosBloqueados(rol === 'USUARIO' && Platform.OS !== 'web');
 
     useComandosPantalla({
         titulo: 'Accesibilidad',
         descripcion:
             'Accesibilidad. Puedes decir: activa el alto contraste, aumenta el texto, disminuye el texto, ' +
-            'o desactiva el modo voz.',
+            'o desactiva el modo voz.' +
+            (avisosBloqueados ? ' Las notificaciones de VITA están desactivadas; para activarlas di: activar notificaciones.' : ''),
         ejemplos: ['activa el alto contraste', 'aumenta el texto', 'disminuye el texto', 'habla más despacio'],
         campos: [],
         acciones: [
@@ -51,6 +58,15 @@ export function PantallaAccesibilidad({ rol }: { rol: Rol }) {
                         `Tamaño de texto ${Math.round(escalaTexto * 100)} por ciento.`,
                     ),
             },
+            ...(avisosBloqueados
+                ? [
+                    {
+                        frases: ['activar notificaciones', 'activa las notificaciones', 'permitir notificaciones', 'abrir ajustes de vita'],
+                        etiqueta: 'activar las notificaciones',
+                        ejecutar: abrirAjustesDelCelular,
+                    },
+                ]
+                : []),
             ...accionesComunesVoz(rol, anunciar),
         ],
     });
@@ -68,6 +84,8 @@ export function PantallaAccesibilidad({ rol }: { rol: Rol }) {
             <Tarjeta>
                 <BarraAccesibilidad />
             </Tarjeta>
+
+            <TarjetaAvisosBloqueados bloqueados={avisosBloqueados} />
 
             <Tarjeta titulo="¿Qué hace cada opción?" icono="info">
                 {EXPLICACIONES.map((e) => (
