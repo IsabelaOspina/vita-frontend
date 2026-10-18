@@ -11,12 +11,17 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { ApiError } from '@/services/api';
 import { obtenerMiUsuario } from '@/services/usuarioService';
 import { rutaDeInicio } from '@/utils/sesion';
-import { eliminarToken, obtenerToken } from '@/utils/tokenStorage';
+import type { Rol } from '@/dto/Rol';
+import { eliminarToken, guardarRol, obtenerRol, obtenerToken, tokenVencido } from '@/utils/tokenStorage';
 
 /**
  * Punto de entrada de la app. Si hay una sesión guardada en el celular y el token sigue vigente,
  * entra directo a la pantalla de su rol (paciente, personal de salud o administrador), sin volver
  * a pedir el correo y la contraseña. Si no hay sesión, o el token venció, va al inicio de sesión.
+ *
+ * Para que abrir la app sea rápido, si el rol está guardado y el token no ha vencido se entra de
+ * inmediato, sin esperar al servidor (que puede tardar en arrancar), y la cuenta se confirma con el
+ * backend por detrás: si la sesión ya no sirve (cuenta desactivada), se vuelve al inicio de sesión.
  */
 export default function Index() {
     const { colores } = useAccesibilidad();
@@ -25,13 +30,37 @@ export default function Index() {
     const entrar = useCallback(async () => {
         setSinConexion(false);
         const token = await obtenerToken();
-        if (!token) {
+        if (!token || tokenVencido(token)) {
+            if (token) await eliminarToken();
             router.replace('/login');
             return;
         }
+
+        const rolGuardado = (await obtenerRol()) as Rol | null;
+        if (rolGuardado) {
+            // Entra ya, y confirma con el backend por detrás
+            router.replace(rutaDeInicio(rolGuardado));
+            obtenerMiUsuario(token)
+                .then((usuario) => {
+                    if (usuario.rol !== rolGuardado) {
+                        void guardarRol(usuario.rol);
+                        router.replace(rutaDeInicio(usuario.rol));
+                    }
+                })
+                .catch(async (e) => {
+                    if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+                        await eliminarToken();
+                        router.replace('/login');
+                    }
+                    // Sin conexión: se sigue con la sesión guardada; las pantallas avisan si no cargan
+                });
+            return;
+        }
+
         try {
             // Se confirma con el backend que el token sigue siendo válido y de qué rol es la cuenta
             const usuario = await obtenerMiUsuario(token);
+            await guardarRol(usuario.rol);
             router.replace(rutaDeInicio(usuario.rol));
         } catch (e) {
             if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
