@@ -16,21 +16,52 @@ import { Icono } from './icono';
 import { Texto } from './texto';
 
 // ---------------------------------------------------------------------------------------------
-// Notificaciones del celular (opción B)
+// Notificaciones del celular
 // ---------------------------------------------------------------------------------------------
 
-type ModuloNotificaciones = typeof import('expo-notifications');
+type ModuloNotificaciones = Pick<
+    typeof import('expo-notifications'),
+    | 'setNotificationHandler'
+    | 'setNotificationChannelAsync'
+    | 'getPermissionsAsync'
+    | 'requestPermissionsAsync'
+    | 'getAllScheduledNotificationsAsync'
+    | 'scheduleNotificationAsync'
+    | 'cancelScheduledNotificationAsync'
+    | 'addNotificationResponseReceivedListener'
+    | 'getLastNotificationResponseAsync'
+    | 'AndroidImportance'
+    | 'SchedulableTriggerInputTypes'
+>;
 
 /**
- * Carga expo-notifications solo si está disponible.
+ * Carga solo las partes de expo-notifications que usa VITA (notificaciones locales programadas).
+ *
+ * No se importa el paquete completo a propósito: su archivo principal registra las notificaciones
+ * push (remotas), que VITA no usa, y en Expo Go para Android eso muestra la advertencia
+ * "Push notifications (remote notifications) are unavailable in Expo Go...". Cargando solo estas
+ * partes, las notificaciones locales funcionan en Expo Go, en el development build y en el APK,
+ * sin advertencias.
+ *
  * En la web no existe, y en un development build creado antes de instalar la librería tampoco:
  * en esos casos la app sigue funcionando y los recordatorios se avisan solo dentro de la app.
  */
 function cargarNotificaciones(): ModuloNotificaciones | null {
     if (Platform.OS === 'web' || !requireOptionalNativeModule('ExpoNotificationScheduler')) return null;
     try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        return require('expo-notifications') as ModuloNotificaciones;
+        /* eslint-disable @typescript-eslint/no-require-imports */
+        return {
+            ...require('expo-notifications/build/NotificationsHandler'),
+            ...require('expo-notifications/build/NotificationPermissions'),
+            ...require('expo-notifications/build/NotificationsEmitter'),
+            setNotificationChannelAsync: require('expo-notifications/build/setNotificationChannelAsync').setNotificationChannelAsync,
+            getAllScheduledNotificationsAsync: require('expo-notifications/build/getAllScheduledNotificationsAsync').getAllScheduledNotificationsAsync,
+            scheduleNotificationAsync: require('expo-notifications/build/scheduleNotificationAsync').scheduleNotificationAsync,
+            cancelScheduledNotificationAsync: require('expo-notifications/build/cancelScheduledNotificationAsync').cancelScheduledNotificationAsync,
+            AndroidImportance: require('expo-notifications/build/NotificationChannelManager.types').AndroidImportance,
+            SchedulableTriggerInputTypes: require('expo-notifications/build/Notifications.types').SchedulableTriggerInputTypes,
+        } as ModuloNotificaciones;
+        /* eslint-enable @typescript-eslint/no-require-imports */
     } catch {
         return null;
     }
@@ -39,7 +70,11 @@ function cargarNotificaciones(): ModuloNotificaciones | null {
 const notificaciones = cargarNotificaciones();
 
 const PREFIJO = 'vita-recordatorio-';
-const CANAL = 'recordatorios';
+/** Canales de Android: uno con sonido (avisos de voz y de sonido) y uno silencioso (aviso visual). */
+const CANAL_SONIDO = 'vita-recordatorios';
+const CANAL_VISUAL = 'vita-recordatorios-visual';
+/** Si cambia la forma de programar, las notificaciones de versiones anteriores se vuelven a programar. */
+const VERSION_PROGRAMACION = 2;
 /** Cada cuánto se consulta la agenda de recordatorios al backend. */
 const CONSULTA_MS = 30_000;
 /** Cada cuánto se revisa si ya llegó la hora de alguno (con lo último que se consultó). */
@@ -47,9 +82,9 @@ const REVISION_MS = 5_000;
 /** Un recordatorio que se pasó hace menos de esto todavía se avisa (por ejemplo, si la app estaba cerrada). */
 const ATRASO_MAXIMO_MS = 15 * 60_000;
 /** Hasta cuándo se programan notificaciones en el celular. */
-const DIAS_PROGRAMADOS = 7;
+const DIAS_PROGRAMADOS = 14;
 /** iOS permite máximo 64 notificaciones programadas por app. */
-const MAXIMO_PROGRAMADAS = 50;
+const MAXIMO_PROGRAMADAS = Platform.OS === 'ios' ? 60 : 300;
 
 if (notificaciones) {
     // Con la app abierta, el aviso lo da la propia app (con voz, sonido o en pantalla),
@@ -71,11 +106,24 @@ async function prepararNotificaciones(): Promise<boolean> {
     if (!notificaciones) return false;
     try {
         if (Platform.OS === 'android') {
-            await notificaciones.setNotificationChannelAsync(CANAL, {
+            // Importancia máxima: la notificación aparece arriba de la pantalla aunque el celular esté bloqueado
+            await notificaciones.setNotificationChannelAsync(CANAL_SONIDO, {
                 name: 'Recordatorios de VITA',
-                importance: notificaciones.AndroidImportance.HIGH,
+                description: 'Citas, terapias y tomas de medicamentos',
+                importance: notificaciones.AndroidImportance.MAX,
                 vibrationPattern: [0, 400, 200, 400],
                 sound: 'default',
+                enableVibrate: true,
+                showBadge: true,
+            });
+            await notificaciones.setNotificationChannelAsync(CANAL_VISUAL, {
+                name: 'Recordatorios visuales de VITA',
+                description: 'Recordatorios sin sonido (aviso visual)',
+                importance: notificaciones.AndroidImportance.HIGH,
+                vibrationPattern: [0, 250],
+                sound: null,
+                enableVibrate: true,
+                showBadge: true,
             });
         }
         const actual = await notificaciones.getPermissionsAsync();
@@ -98,34 +146,44 @@ async function sincronizarNotificaciones(proximos: RecordatorioResponse[]) {
         for (const p of programadas) {
             if (!p.identifier.startsWith(PREFIJO)) continue;
             const r = deseadas.get(p.identifier);
-            if (!r || p.content.data?.fechaHora !== r.fechaHora) {
+            if (!r || p.content.data?.fechaHora !== r.fechaHora || p.content.data?.version !== VERSION_PROGRAMACION) {
                 await notificaciones.cancelScheduledNotificationAsync(p.identifier);
             } else {
                 deseadas.delete(p.identifier);
             }
         }
 
-        // Programa las que faltan
+        // Programa las que faltan (si una falla, se siguen programando las demás)
         for (const [identificador, r] of deseadas) {
-            await notificaciones.scheduleNotificationAsync({
-                identifier: identificador,
-                content: {
-                    title: 'VITA · Recordatorio',
-                    body: r.mensaje,
-                    // Con la app cerrada no se puede hablar: el aviso de voz suena como el de sonido
-                    sound: r.tipoRecordatorio === 'VISUAL' ? false : 'default',
-                    data: { recordatorioId: r.id, fechaHora: r.fechaHora },
-                },
-                trigger: {
-                    type: notificaciones.SchedulableTriggerInputTypes.DATE,
-                    date: deFechaLocal(r.fechaHora),
-                    channelId: CANAL,
-                },
-            });
+            const visual = r.tipoRecordatorio === 'VISUAL';
+            try {
+                await notificaciones.scheduleNotificationAsync({
+                    identifier: identificador,
+                    content: {
+                        title: 'VITA · Recordatorio',
+                        body: r.mensaje,
+                        // Con la app cerrada no se puede hablar: el aviso de voz suena como el de sonido
+                        sound: visual ? false : 'default',
+                        data: { recordatorioId: r.id, fechaHora: r.fechaHora, version: VERSION_PROGRAMACION },
+                    },
+                    trigger: {
+                        type: notificaciones.SchedulableTriggerInputTypes.DATE,
+                        date: deFechaLocal(r.fechaHora),
+                        channelId: visual ? CANAL_VISUAL : CANAL_SONIDO,
+                    },
+                });
+            } catch {
+                // Se intenta de nuevo en la próxima sincronización
+            }
         }
     } catch {
         // Si el celular no deja programar, los avisos siguen funcionando dentro de la app
     }
+}
+
+/** Al cerrar sesión: quita del celular todos los recordatorios de VITA programados. */
+export function cancelarRecordatoriosDelCelular(): Promise<void> {
+    return cancelarNotificaciones();
 }
 
 async function cancelarNotificaciones(ids?: number[]) {
@@ -212,7 +270,7 @@ function textoAviso(r: RecordatorioResponse) {
  *   avisa según el tipo: con voz lo dice en voz alta, con sonido suena un tono y siempre muestra un
  *   aviso grande con "Entendido". Al mostrarlo lo marca como enviado y con "Entendido" lo confirma.
  * - Con la app cerrada (solo celular): deja programadas notificaciones del sistema para los próximos
- *   7 días, que llegan aunque VITA no esté abierta.
+ *   14 días, que llegan aunque VITA no esté abierta (con alarmas exactas, ver los permisos en app.json).
  *
  * Va en el _layout del paciente para que funcione en cualquier pantalla mientras la sesión esté abierta.
  */
@@ -279,8 +337,9 @@ export function VigilanteRecordatorios() {
         };
     }, [consultar, revisar]);
 
-    // Al cerrar sesión (se desmontan las pestañas del paciente) no deben quedar notificaciones programadas
-    useEffect(() => () => void cancelarNotificaciones(), []);
+    // Ojo: aquí NO se cancelan las notificaciones al desmontar. En Android, salir de la app con el botón
+    // "atrás" también desmonta esta pantalla, y se perderían todos los recordatorios con la app cerrada.
+    // Se cancelan solo al cerrar sesión (ver cancelarRecordatoriosDelCelular).
 
     // Si se toca una notificación del celular, al abrir la app se muestra su aviso
     useEffect(() => {
