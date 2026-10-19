@@ -5,7 +5,7 @@ import { AltoTactil, Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 
 import { Icono, type NombreIcono } from './icono';
-import { Texto } from './texto';
+import { ESCALA_MAXIMA_DEL_CELULAR, Texto } from './texto';
 
 /**
  * Microsoft Edge (y algunos navegadores) agregan su propio botón de "ver contraseña" dentro del
@@ -67,6 +67,7 @@ export const Campo = forwardRef<TextInput, Props>(function Campo(
 
                 <TextInput
                     ref={ref}
+                    maxFontSizeMultiplier={ESCALA_MAXIMA_DEL_CELULAR}
                     {...props}
                     secureTextEntry={esContrasena && oculto}
                     placeholderTextColor={colores.textoTenue}

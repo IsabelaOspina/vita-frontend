@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AnchoMaximo, Espacio } from '@/constants/vita-theme';
@@ -19,6 +19,9 @@ type Props = {
  */
 export function FondoPantalla({ children, pie }: Props) {
     const { colores } = useAccesibilidad();
+    // En celulares angostos (o con letra grande) los márgenes laterales son más pequeños, para que quepa el texto
+    const { width } = useWindowDimensions();
+    const margen = width < 380 ? Espacio.l : Espacio.xl;
 
     return (
         // overflow hidden: recorta las formas decorativas para que no generen scroll horizontal en web
@@ -30,7 +33,7 @@ export function FondoPantalla({ children, pie }: Props) {
             <SafeAreaView style={styles.raiz} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView style={styles.raiz} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                     <ScrollView
-                        contentContainerStyle={styles.scroll}
+                        contentContainerStyle={[styles.scroll, { paddingHorizontal: margen }]}
                         keyboardShouldPersistTaps="handled"
                         showsVerticalScrollIndicator={false}>
                         <View style={styles.columna}>
@@ -40,7 +43,7 @@ export function FondoPantalla({ children, pie }: Props) {
                         </View>
                     </ScrollView>
                     {pie && (
-                        <View style={styles.pie}>
+                        <View style={[styles.pie, { paddingHorizontal: margen }]}>
                             <View style={styles.columna}>{pie}</View>
                         </View>
                     )}

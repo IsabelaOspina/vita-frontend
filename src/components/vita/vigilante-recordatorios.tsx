@@ -24,6 +24,7 @@ type ModuloNotificaciones = Pick<
     typeof import('expo-notifications'),
     | 'setNotificationHandler'
     | 'setNotificationChannelAsync'
+    | 'deleteNotificationChannelAsync'
     | 'getPermissionsAsync'
     | 'requestPermissionsAsync'
     | 'getAllScheduledNotificationsAsync'
@@ -32,6 +33,8 @@ type ModuloNotificaciones = Pick<
     | 'addNotificationResponseReceivedListener'
     | 'getLastNotificationResponseAsync'
     | 'AndroidImportance'
+    | 'AndroidNotificationPriority'
+    | 'AndroidNotificationVisibility'
     | 'SchedulableTriggerInputTypes'
 >;
 
@@ -56,10 +59,13 @@ function cargarNotificaciones(): ModuloNotificaciones | null {
             ...require('expo-notifications/build/NotificationPermissions'),
             ...require('expo-notifications/build/NotificationsEmitter'),
             setNotificationChannelAsync: require('expo-notifications/build/setNotificationChannelAsync').setNotificationChannelAsync,
+            deleteNotificationChannelAsync: require('expo-notifications/build/deleteNotificationChannelAsync').deleteNotificationChannelAsync,
             getAllScheduledNotificationsAsync: require('expo-notifications/build/getAllScheduledNotificationsAsync').getAllScheduledNotificationsAsync,
             scheduleNotificationAsync: require('expo-notifications/build/scheduleNotificationAsync').scheduleNotificationAsync,
             cancelScheduledNotificationAsync: require('expo-notifications/build/cancelScheduledNotificationAsync').cancelScheduledNotificationAsync,
             AndroidImportance: require('expo-notifications/build/NotificationChannelManager.types').AndroidImportance,
+            AndroidNotificationVisibility: require('expo-notifications/build/NotificationChannelManager.types').AndroidNotificationVisibility,
+            AndroidNotificationPriority: require('expo-notifications/build/Notifications.types').AndroidNotificationPriority,
             SchedulableTriggerInputTypes: require('expo-notifications/build/Notifications.types').SchedulableTriggerInputTypes,
         } as ModuloNotificaciones;
         /* eslint-enable @typescript-eslint/no-require-imports */
@@ -71,11 +77,19 @@ function cargarNotificaciones(): ModuloNotificaciones | null {
 const notificaciones = cargarNotificaciones();
 
 const PREFIJO = 'vita-recordatorio-';
-/** Canales de Android: uno con sonido (avisos de voz y de sonido) y uno silencioso (aviso visual). */
-const CANAL_SONIDO = 'vita-recordatorios';
-const CANAL_VISUAL = 'vita-recordatorios-visual';
+/**
+ * Canal de Android de los recordatorios. Es uno solo para los tres tipos de aviso (voz, sonido y
+ * visual): con VITA cerrada no se puede hablar ni mostrar el aviso grande, así que todos llegan como
+ * notificación con importancia máxima, sonido y vibración, para que se vean siempre y a su hora.
+ * El tipo de aviso se respeta dentro de la app (voz, tono o solo pantalla).
+ *
+ * Android no deja cambiar un canal después de creado; por eso es un canal nuevo y se borran los
+ * de versiones anteriores (uno de ellos, el "visual", era silencioso y en algunos celulares no se veía).
+ */
+const CANAL = 'vita-avisos';
+const CANALES_ANTERIORES = ['vita-recordatorios', 'vita-recordatorios-visual'];
 /** Si cambia la forma de programar, las notificaciones de versiones anteriores se vuelven a programar. */
-const VERSION_PROGRAMACION = 3;
+const VERSION_PROGRAMACION = 4;
 /** Cada cuánto se consulta la agenda de recordatorios al backend. */
 const CONSULTA_MS = 30_000;
 /** Cada cuánto se revisa si ya llegó la hora de alguno (con lo último que se consultó). */
@@ -88,14 +102,17 @@ const DIAS_PROGRAMADOS = 14;
 const MAXIMO_PROGRAMADAS = Platform.OS === 'ios' ? 60 : 300;
 
 if (notificaciones) {
-    // Con la app abierta, el aviso lo da la propia app (con voz, sonido o en pantalla),
-    // así que la notificación del sistema no se muestra; solo se deja sonar el tono de "Sonido".
+    // Con la app abierta (en pantalla), el aviso grande lo da la propia app (con voz, sonido o solo en
+    // pantalla); la notificación queda en la lista del celular sin el globo de arriba. Con la app cerrada,
+    // en segundo plano o con la pantalla bloqueada, Android muestra la notificación completa.
     notificaciones.setNotificationHandler({
         handleNotification: async (n) => {
             const soloTono = n.request.content.data?.soloTono === true;
+            // Con VITA abierta el aviso grande lo muestra la app; la notificación igual queda en la
+            // lista del celular (sin el globo de arriba, para no repetir el aviso)
             return {
                 shouldShowBanner: false,
-                shouldShowList: false,
+                shouldShowList: !soloTono,
                 shouldPlaySound: soloTono,
                 shouldSetBadge: false,
             };
@@ -108,7 +125,7 @@ async function prepararNotificaciones(): Promise<boolean> {
     try {
         if (Platform.OS === 'android') {
             // Importancia máxima: la notificación aparece arriba de la pantalla aunque el celular esté bloqueado
-            await notificaciones.setNotificationChannelAsync(CANAL_SONIDO, {
+            await notificaciones.setNotificationChannelAsync(CANAL, {
                 name: 'Recordatorios de VITA',
                 description: 'Citas, terapias y tomas de medicamentos',
                 importance: notificaciones.AndroidImportance.MAX,
@@ -116,16 +133,11 @@ async function prepararNotificaciones(): Promise<boolean> {
                 sound: 'default',
                 enableVibrate: true,
                 showBadge: true,
+                lockscreenVisibility: notificaciones.AndroidNotificationVisibility.PUBLIC,
             });
-            await notificaciones.setNotificationChannelAsync(CANAL_VISUAL, {
-                name: 'Recordatorios visuales de VITA',
-                description: 'Recordatorios sin sonido (aviso visual)',
-                importance: notificaciones.AndroidImportance.HIGH,
-                vibrationPattern: [0, 250],
-                sound: null,
-                enableVibrate: true,
-                showBadge: true,
-            });
+            for (const anterior of CANALES_ANTERIORES) {
+                await notificaciones.deleteNotificationChannelAsync(anterior).catch(() => undefined);
+            }
         }
         const actual = await notificaciones.getPermissionsAsync();
         if (actual.granted) return true;
@@ -156,7 +168,6 @@ async function sincronizarNotificaciones(proximos: RecordatorioResponse[]) {
 
         // Programa las que faltan (si una falla, se siguen programando las demás)
         for (const [identificador, r] of deseadas) {
-            const visual = r.tipoRecordatorio === 'VISUAL';
             try {
                 await notificaciones.scheduleNotificationAsync({
                     identifier: identificador,
@@ -164,14 +175,16 @@ async function sincronizarNotificaciones(proximos: RecordatorioResponse[]) {
                         // Las tomas de medicamentos llegan igual que los recordatorios de actividades
                         title: r.tomaMedicamentoId ? 'VITA · Hora de tu medicamento' : 'VITA · Recordatorio',
                         body: r.mensaje,
-                        // Con la app cerrada no se puede hablar: el aviso de voz suena como el de sonido
-                        sound: visual ? false : 'default',
+                        // Con la app cerrada no se puede hablar ni mostrar el aviso grande: los tres tipos
+                        // (voz, sonido y visual) llegan como notificación con sonido, para que siempre se note
+                        sound: 'default',
+                        priority: notificaciones.AndroidNotificationPriority.MAX,
                         data: { recordatorioId: r.id, fechaHora: r.fechaHora, version: VERSION_PROGRAMACION },
                     },
                     trigger: {
                         type: notificaciones.SchedulableTriggerInputTypes.DATE,
                         date: deFechaLocal(r.fechaHora),
-                        channelId: visual ? CANAL_VISUAL : CANAL_SONIDO,
+                        channelId: CANAL,
                     },
                 });
             } catch {

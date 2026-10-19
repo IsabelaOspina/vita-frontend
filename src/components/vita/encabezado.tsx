@@ -106,6 +106,7 @@ const styles = StyleSheet.create({
     },
     barra: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: Espacio.m,

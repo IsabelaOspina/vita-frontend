@@ -62,8 +62,7 @@ function Opcion({ compacta, icono, titulo, detalle, activo, onPress }: OpcionPro
                 variante="pequeno"
                 peso="700"
                 centrado
-                style={{ color: activo ? colores.sobrePrimario : colores.texto }}
-                numberOfLines={2}>
+                style={{ color: activo ? colores.sobrePrimario : colores.texto }}>
                 {titulo}
             </Texto>
             {detalle && (

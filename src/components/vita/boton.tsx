@@ -53,7 +53,7 @@ export function Boton({ titulo, onPress, variante = 'primario', icono, cargando,
                 <ActivityIndicator color={colorContenido} />
             ) : (
                 <View style={styles.contenido}>
-                    <Texto variante="cuerpo" peso="700" style={{ color: colorContenido }}>
+                    <Texto variante="cuerpo" peso="700" centrado style={[styles.texto, { color: colorContenido }]}>
                         {titulo}
                     </Texto>
                     {icono && <Icono nombre={icono} tamano={22} color={colorContenido} />}
@@ -67,7 +67,8 @@ const styles = StyleSheet.create({
     base: {
         minHeight: AltoTactil,
         borderRadius: Radio.m,
-        paddingHorizontal: Espacio.xl,
+        paddingHorizontal: Espacio.l,
+        paddingVertical: Espacio.s,
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -77,7 +78,13 @@ const styles = StyleSheet.create({
     contenido: {
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
         gap: Espacio.s,
+        // Si el texto no cabe en una línea (pantalla angosta o letra grande), se parte en dos
+        maxWidth: '100%',
+    },
+    texto: {
+        flexShrink: 1,
     },
     presionado: {
         transform: [{ scale: 0.98 }],

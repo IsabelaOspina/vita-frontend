@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
@@ -19,12 +19,16 @@ type Props = {
 /** Sección blanca con bordes redondeados (en alto contraste, negra con borde blanco). */
 export function Tarjeta({ titulo, icono, extra, children }: Props) {
     const { colores, altoContraste } = useAccesibilidad();
+    // En celulares angostos, menos relleno para que el contenido tenga más espacio
+    const { width } = useWindowDimensions();
+    const relleno = width < 380 ? Espacio.l : Espacio.xl;
 
     return (
         <View
             style={[
                 styles.tarjeta,
                 {
+                    padding: relleno,
                     backgroundColor: colores.superficie,
                     borderColor: altoContraste ? colores.borde : 'transparent',
                 },
@@ -40,7 +44,7 @@ export function Tarjeta({ titulo, icono, extra, children }: Props) {
                     <Texto variante="subtitulo" accessibilityRole="header" style={styles.titulo}>
                         {titulo}
                     </Texto>
-                    {extra}
+                    {extra ? <View style={styles.extra}>{extra}</View> : null}
                 </View>
             )}
             {children}
@@ -73,5 +77,9 @@ const styles = StyleSheet.create({
     },
     titulo: {
         flex: 1,
+    },
+    // Lo de la derecha del título (por ejemplo "0 de 2") no se parte en varias líneas
+    extra: {
+        flexShrink: 0,
     },
 });
