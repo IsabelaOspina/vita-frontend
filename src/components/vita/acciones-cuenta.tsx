@@ -24,6 +24,28 @@ export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void
         // Solo el paciente tiene "Mi salud": agenda, medicamentos y síntomas
         ...(rol === 'USUARIO'
             ? [
+                // Emergencias: con el tipo se envía la alerta de una vez; sin el tipo se abre "Pedir ayuda".
+                // "enviar" lleva la hora para que cada orden se envíe una sola vez
+                {
+                    frases: ['emergencia medica', 'tengo una emergencia medica', 'necesito un medico', 'me siento muy mal', 'llamen una ambulancia', 'necesito una ambulancia'],
+                    etiqueta: 'enviar alerta de emergencia médica',
+                    ejecutar: () => router.navigate({ pathname: '/paciente/emergencia', params: { tipo: 'MEDICA', enviar: String(Date.now()) } }),
+                },
+                {
+                    frases: ['tuve un accidente', 'emergencia accidente', 'me cai', 'me accidente', 'tengo un accidente'],
+                    etiqueta: 'enviar alerta de accidente',
+                    ejecutar: () => router.navigate({ pathname: '/paciente/emergencia', params: { tipo: 'ACCIDENTE', enviar: String(Date.now()) } }),
+                },
+                {
+                    frases: ['otra emergencia', 'tengo otra emergencia'],
+                    etiqueta: 'enviar alerta de otra emergencia',
+                    ejecutar: () => router.navigate({ pathname: '/paciente/emergencia', params: { tipo: 'OTRA', enviar: String(Date.now()) } }),
+                },
+                {
+                    frases: ['emergencia', 'pedir ayuda', 'necesito ayuda', 'auxilio', 'socorro', 'tengo una emergencia', 'sos'],
+                    etiqueta: 'pedir ayuda de emergencia',
+                    ejecutar: () => router.navigate('/paciente/emergencia'),
+                },
                 {
                     frases: ['ve a mi salud', 'ir a mi salud', 'abre mi salud', 'mi salud', 'pestana mi salud'],
                     etiqueta: 'ir a mi salud',

@@ -1,5 +1,5 @@
 import { requireOptionalNativeModule } from 'expo';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
     createContext,
     useCallback,
@@ -10,9 +10,10 @@ import {
     type MutableRefObject,
     type ReactNode,
 } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { useAccesibilidad } from '@/context/accesibilidad-context';
+import type { TipoEmergencia } from '@/dto/TipoEmergencia';
 import {
     aPalabras,
     ajustarValor,
@@ -26,6 +27,7 @@ import {
     type PasoOpcional,
     type Resultado,
 } from '@/utils/comandos-voz';
+import { detectarPedidoDeAyuda } from '@/utils/emergencia';
 import {
     abrirGrupo,
     alCambiarHabla,
@@ -106,6 +108,7 @@ const PALABRAS_CLAVE = [
     'Oye VITA', 'VITA', 'arroba', 'punto com', 'gmail', 'hotmail', 'outlook', 'contraseña', 'correo',
     'cédula', 'iniciar sesión', 'crear cuenta', 'contacto de emergencia', 'parentesco', 'deletrea',
     'síntoma', 'síntomas', 'intensidad', 'evolución', 'náuseas', 'mareo',
+    'pedir ayuda', 'auxilio', 'socorro', 'emergencia', 'ambulancia', 'accidente',
 ];
 
 /** Respuestas que confirman una pregunta de sí o no. */
@@ -204,13 +207,23 @@ type Asistente = {
      * Con el modo voz activo, al terminar queda escuchando la respuesta sin necesidad de "Oye VITA".
      */
     avisar: (texto: string) => void;
+    /**
+     * Pedir ayuda por voz (botón flotante o escucha de emergencia): activa el modo voz, abre
+     * "Pedir ayuda" y pregunta qué pasó. Si ya se sabe el tipo, pregunta si se envía la alerta.
+     * Nunca envía la alerta sin que la persona lo confirme.
+     */
+    pedirAyuda: (tipo?: TipoEmergencia | null) => void;
+    /** Las pantallas del paciente permiten la escucha de emergencia mientras están abiertas. */
+    permitirEscuchaEmergencia: (permitir: boolean) => void;
+    /** true mientras el micrófono está atento a "pedir ayuda" (con el modo voz apagado). */
+    escuchaEmergenciaActiva: boolean;
 };
 
 const AsistenteContext = createContext<Asistente | null>(null);
 
 export function AsistenteProvider({ children }: { children: ReactNode }) {
     const accesibilidad = useAccesibilidad();
-    const { modoVoz } = accesibilidad;
+    const { modoVoz, escuchaEmergencia } = accesibilidad;
 
     const [disponible, setDisponible] = useState(false);
     const [estado, setEstado] = useState<EstadoAsistente>('apagado');
@@ -242,6 +255,17 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
     /** Cuántas veces seguidas no entendió. */
     const fallosRef = useRef(0);
 
+    // Escucha de emergencia: con el modo voz apagado, el micrófono solo espera "pedir ayuda"
+    const guardiaRef = useRef(false);
+    const [emergenciaPermitida, setEmergenciaPermitida] = useState(false);
+    const [escuchaEmergenciaActiva, setEscuchaEmergenciaActiva] = useState(false);
+    /** La escucha se detiene con VITA en segundo plano (Android no deja usar el micrófono ahí). */
+    const [appActiva, setAppActiva] = useState(AppState.currentState !== 'background');
+    /** Falló el micrófono (sin permiso, ocupado…): no se insiste hasta que algo cambie. */
+    const [guardiaFallo, setGuardiaFallo] = useState(false);
+    /** Al activarse el modo voz por un pedido de ayuda, se abre "Pedir ayuda" en vez del saludo normal. */
+    const porEmergenciaRef = useRef<{ tipo: TipoEmergencia | null } | null>(null);
+
     // Se detecta al abrir la app (no durante el render) para que la versión web generada
     // de antemano coincida con lo que muestra el navegador
     useEffect(() => {
@@ -267,7 +291,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
     }, [actualizarEstado]);
 
     const empezarEscucha = useCallback(() => {
-        if (!reconocimiento || !activoRef.current || escuchandoRef.current || estaHablando()) return;
+        if (!reconocimiento || !(activoRef.current || guardiaRef.current) || escuchandoRef.current || estaHablando()) return;
         escuchandoRef.current = true;
         try {
             reconocimiento.ExpoSpeechRecognitionModule.start({
@@ -379,9 +403,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     const ejemplos = pantalla?.ejemplos ?? [];
                     hablar(
                         (ejemplos.length ? `Aquí puedes decir: ${ejemplos.join('. ')}. ` : '') +
-                            'Puedes decir varias cosas seguidas, unidas con "y". ' +
-                            'También: qué falta, deletrea la contraseña, borra el correo, repite, ' +
-                            'habla más rápido o más despacio, alto contraste, aumenta el texto, o desactiva el modo voz.',
+                        'Puedes decir varias cosas seguidas, unidas con "y". ' +
+                        'También: qué falta, deletrea la contraseña, borra el correo, repite, ' +
+                        'habla más rápido o más despacio, alto contraste, aumenta el texto, o desactiva el modo voz.',
                     );
                     break;
                 }
@@ -477,9 +501,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                     const cantidad = lista.elementos.length;
                     hablar(
                         `${lista.nombre}: ${cantidad === 1 ? 'hay uno' : `hay ${cantidad}`}. ` +
-                            lista.elementos
-                                .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`.replace(/\.$/, ''))
-                                .join('. ') + '.',
+                        lista.elementos
+                            .map((e, i) => `${i + 1}: ${e.nombre}${e.detalle ? `, ${e.detalle}` : ''}`.replace(/\.$/, ''))
+                            .join('. ') + '.',
                     );
                     break;
                 }
@@ -706,6 +730,54 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
         return true;
     }, []);
 
+    // ----- Pedir ayuda por voz -------------------------------------------------------------------
+
+    /**
+     * Abre "Pedir ayuda" para que pregunte qué pasó (o si se envía la alerta, si ya se sabe el tipo).
+     * La marca "preguntar" hace que la pantalla lo diga aunque ya estuviera abierta.
+     */
+    const abrirPedirAyuda = useCallback((tipo: TipoEmergencia | null) => {
+        router.navigate({
+            pathname: '/paciente/emergencia',
+            // El tipo va dentro de la marca, para no mezclarse con el de una visita anterior
+            params: { preguntar: tipo ? `${Date.now()}-${tipo}` : String(Date.now()) },
+        });
+    }, []);
+
+    const pedirAyuda = useCallback(
+        (tipo: TipoEmergencia | null = null) => {
+            const a = accesibilidadRef.current;
+            // Sin asistente disponible (Expo Go, Firefox) o con el modo voz ya activo: solo se abre la pantalla
+            if (a.modoVoz || !disponible || !reconocimiento) {
+                abrirPedirAyuda(tipo);
+                return;
+            }
+            porEmergenciaRef.current = { tipo };
+            a.alternarModoVoz();
+        },
+        [abrirPedirAyuda, disponible],
+    );
+
+    /** Escucha de emergencia: si lo que se oyó es un pedido de ayuda, se activa el modo voz para pedirla. */
+    const revisarPedidoDeAyuda = useCallback(
+        (alternativas: string[]) => {
+            if (esEco(alternativas[0])) return;
+            for (const texto of alternativas) {
+                const tipo = detectarPedidoDeAyuda(texto);
+                if (tipo === undefined) continue;
+                guardiaRef.current = false;
+                setEscuchaEmergenciaActiva(false);
+                if (escuchandoRef.current) {
+                    escuchandoRef.current = false;
+                    reconocimiento?.ExpoSpeechRecognitionModule.abort();
+                }
+                pedirAyuda(tipo);
+                return;
+            }
+        },
+        [pedirAyuda],
+    );
+
     // ----- Eventos del micrófono y de la voz -----------------------------------------------------
 
     useEffect(() => {
@@ -741,6 +813,12 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 const alternativas = evento.results.map((r) => r.transcript).filter((t) => t.trim());
                 if (!alternativas.length) return;
 
+                // Escucha de emergencia (modo voz apagado): solo importa si alguien pide ayuda
+                if (!activoRef.current) {
+                    if (guardiaRef.current && evento.isFinal) revisarPedidoDeAyuda(alternativas);
+                    return;
+                }
+
                 // Si estaba en el tiempo de respuesta cuando empezó a hablar, cuenta aunque termine después
                 if (!fraseRef.current) fraseRef.current = { partes: [], atento: Date.now() < atentoHastaRef.current };
                 const frase = fraseRef.current;
@@ -758,6 +836,13 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             modulo.addListener('error', (evento) => {
                 // "aborted" es normal: pasa cada vez que se apaga el micrófono para que hable la app
                 const grave = ERRORES_GRAVES[evento.error];
+                if (grave && !activoRef.current && guardiaRef.current) {
+                    // La escucha de emergencia se detiene en silencio (el botón rojo sigue disponible)
+                    guardiaRef.current = false;
+                    setEscuchaEmergenciaActiva(false);
+                    setGuardiaFallo(true);
+                    return;
+                }
                 if (grave) {
                     activoRef.current = false;
                     hablar(grave);
@@ -768,7 +853,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             modulo.addListener('end', () => {
                 escuchandoRef.current = false;
                 // El reconocedor se detiene solo cada cierto tiempo: si el asistente sigue activo, se reinicia
-                if (activoRef.current) setTimeout(empezarEscucha, 100);
+                if (activoRef.current || guardiaRef.current) setTimeout(empezarEscucha, 100);
             }),
         ];
 
@@ -778,6 +863,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 // Se marca apagado de una vez, sin esperar el aviso "end" (a veces no llega)
                 escuchandoRef.current = false;
                 modulo.abort();
+            } else if (!hablandoAhora && !activoRef.current && guardiaRef.current) {
+                // Con el modo voz apagado VITA también habla (por ejemplo un recordatorio): luego sigue la escucha de emergencia
+                setTimeout(empezarEscucha, ESPERA_MICROFONO_MS);
             } else if (!hablandoAhora && activoRef.current) {
                 // Terminó de responder: el tiempo para contestar sin "Oye VITA" empieza ahora
                 if (seguimientoRef.current || Date.now() < atentoHastaRef.current) {
@@ -793,13 +881,13 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             suscripciones.forEach((s) => s.remove());
             dejarDeOirHabla();
         };
-    }, [abrirVentana, actualizarEstado, empezarEscucha, pareceCompleto, procesar]);
+    }, [abrirVentana, actualizarEstado, empezarEscucha, pareceCompleto, procesar, revisarPedidoDeAyuda]);
 
     // Vigilante: si el asistente está activo, la app no habla y el micrófono quedó apagado
     // (porque el navegador no avisó que terminó algo), lo vuelve a encender
     useEffect(() => {
         const vigilante = setInterval(() => {
-            if (activoRef.current && !escuchandoRef.current && !estaHablando()) empezarEscucha();
+            if ((activoRef.current || guardiaRef.current) && !escuchandoRef.current && !estaHablando()) empezarEscucha();
         }, 3000);
         return () => clearInterval(vigilante);
     }, [empezarEscucha]);
@@ -837,6 +925,14 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             activoRef.current = true;
             const pantalla = pantallaActual();
             pasoRef.current = 0;
+            // Se activó por un pedido de ayuda: directo a "Pedir ayuda", que dice qué pasó y qué sigue
+            const emergencia = porEmergenciaRef.current;
+            if (emergencia) {
+                porEmergenciaRef.current = null;
+                hablar('Modo voz activado. Vamos a pedir ayuda.');
+                abrirPedirAyuda(emergencia.tipo);
+                return;
+            }
             hablar(`Modo voz activado. Di Oye VITA cuando me necesites, o pide ayuda. ${pantalla?.titulo ?? ''}.`);
             // Empieza a pedir los datos de la pantalla; si no falta nada, pregunta qué quiere hacer
             if (!continuarFlujo(new Set(), null, true)) hablar('¿Qué quieres hacer?', true);
@@ -854,6 +950,10 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             if (cancelado) return;
             if (!permiso.granted) {
                 hablar('Modo voz activado, pero sin permiso de micrófono no puedo escuchar órdenes. Actívalo en los ajustes.');
+                // Si fue para pedir ayuda, igual se abre la pantalla (se puede tocar el tipo de emergencia)
+                const emergencia = porEmergenciaRef.current;
+                porEmergenciaRef.current = null;
+                if (emergencia) abrirPedirAyuda(emergencia.tipo);
                 return;
             }
             empezar();
@@ -862,7 +962,64 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
         return () => {
             cancelado = true;
         };
-    }, [modoVoz, disponible, actualizarEstado, continuarFlujo]);
+    }, [modoVoz, disponible, actualizarEstado, continuarFlujo, abrirPedirAyuda]);
+
+    // ----- Escucha de emergencia ----------------------------------------------------------------
+
+    // Se detiene con VITA en segundo plano y vuelve a empezar al regresar
+    useEffect(() => {
+        const suscripcion = AppState.addEventListener('change', (estadoApp) => {
+            setAppActiva(estadoApp !== 'background');
+            if (estadoApp === 'active') setGuardiaFallo(false);
+        });
+        return () => suscripcion.remove();
+    }, []);
+
+    useEffect(() => {
+        const detener = () => {
+            if (!guardiaRef.current) return;
+            guardiaRef.current = false;
+            setEscuchaEmergenciaActiva(false);
+            // Si el modo voz está activo, el micrófono es suyo: no se apaga
+            if (!activoRef.current && escuchandoRef.current) {
+                escuchandoRef.current = false;
+                reconocimiento?.ExpoSpeechRecognitionModule.abort();
+            }
+        };
+
+        if (modoVoz || !disponible || !reconocimiento || !emergenciaPermitida || !escuchaEmergencia || !appActiva || guardiaFallo) {
+            detener();
+            return;
+        }
+
+        let cancelado = false;
+        const empezarGuardia = () => {
+            if (cancelado) return;
+            guardiaRef.current = true;
+            setEscuchaEmergenciaActiva(true);
+            empezarEscucha();
+        };
+
+        // Una pausa corta: si se acaba de apagar el modo voz, el micrófono termina de soltarse
+        const temporizador = setTimeout(() => {
+            if (Platform.OS === 'web') {
+                empezarGuardia();
+                return;
+            }
+            reconocimiento!.ExpoSpeechRecognitionModule.requestPermissionsAsync()
+                .then((permiso) => {
+                    if (permiso.granted) empezarGuardia();
+                    else if (!cancelado) setGuardiaFallo(true);
+                })
+                .catch(() => !cancelado && setGuardiaFallo(true));
+        }, 400);
+
+        return () => {
+            cancelado = true;
+            clearTimeout(temporizador);
+            detener();
+        };
+    }, [modoVoz, disponible, emergenciaPermitida, escuchaEmergencia, appActiva, guardiaFallo, empezarEscucha]);
 
     const prestarAtencion = useCallback(() => {
         if (!activoRef.current) return;
@@ -905,7 +1062,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 // se escucha con "lee la pantalla") y se empieza a pedir lo que falta
                 const esFormulario = ref.current.campos.length > 0;
                 // Las pantallas sin formulario terminan con una pregunta, para que se sepa que VITA escucha
-                hablar(esFormulario ? (ref.current.titulo ?? ref.current.descripcion) : `${ref.current.descripcion} ¿Qué quieres hacer?`, true);
+                const descripcion = ref.current.descripcion;
+                const yaPregunta = /\?\s*$/.test(descripcion);
+                hablar(esFormulario ? (ref.current.titulo ?? descripcion) : yaPregunta ? descripcion : `${descripcion} ¿Qué quieres hacer?`, true);
                 continuarFlujo(new Set(), null, true);
                 seguimientoRef.current = true;
             } else {
@@ -920,6 +1079,9 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             hablar(texto);
             if (activoRef.current) seguimientoRef.current = true;
         },
+        pedirAyuda,
+        permitirEscuchaEmergencia: setEmergenciaPermitida,
+        escuchaEmergenciaActiva,
     };
 
     return <AsistenteContext.Provider value={valor}>{children}</AsistenteContext.Provider>;
@@ -938,8 +1100,11 @@ export function useAsistente() {
  * Mientras la pantalla está abierta, las órdenes de "Oye VITA" se aplican sobre ella.
  * Además, si el modo voz está activo, al entrar a la pantalla se lee su descripción
  * y el asistente pregunta por el primer dato que falta.
+ *
+ * `releer`: una marca que, al cambiar con la pantalla ya abierta, hace que se vuelva a leer
+ * (por ejemplo, "Pedir ayuda" cuando se pide ayuda por voz estando ya en esa pantalla).
  */
-export function useComandosPantalla(pantalla: PantallaVoz) {
+export function useComandosPantalla(pantalla: PantallaVoz, releer?: string) {
     const { registrarPantalla, quitarPantalla } = useAsistente();
     const { modoVoz } = useAccesibilidad();
 
@@ -948,14 +1113,19 @@ export function useComandosPantalla(pantalla: PantallaVoz) {
     ref.current = pantalla;
     const modoVozRef = useRef(modoVoz);
     modoVozRef.current = modoVoz;
+    const releerRef = useRef(releer);
+    releerRef.current = releer;
 
     // Si la pantalla está cargando al entrar, la lectura se deja pendiente hasta que termine
     const enfocadaRef = useRef(false);
     const leerAlCargarRef = useRef(false);
+    /** La última marca `releer` ya atendida (al entrar a la pantalla también cuenta como leída). */
+    const releidaRef = useRef(releer);
 
     useFocusEffect(
         useCallback(() => {
             enfocadaRef.current = true;
+            releidaRef.current = releerRef.current;
             const esperar = !!ref.current.cargando && modoVozRef.current;
             leerAlCargarRef.current = esperar;
             registrarPantalla(ref, esperar ? false : modoVozRef.current);
@@ -975,4 +1145,18 @@ export function useComandosPantalla(pantalla: PantallaVoz) {
         registrarPantalla(ref, modoVozRef.current);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cargando]);
+
+    useEffect(() => {
+        if (!releer || releer === releidaRef.current || !enfocadaRef.current) return;
+        releidaRef.current = releer;
+        // Un momento después, para leer la pantalla ya actualizada (la pantalla se limpia con la misma marca)
+        const temporizador = setTimeout(() => {
+            if (!enfocadaRef.current) return;
+            const esperar = !!ref.current.cargando && modoVozRef.current;
+            leerAlCargarRef.current = esperar;
+            registrarPantalla(ref, esperar ? false : modoVozRef.current);
+        }, 60);
+        return () => clearTimeout(temporizador);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [releer]);
 }

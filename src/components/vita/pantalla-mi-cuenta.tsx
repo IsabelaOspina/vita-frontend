@@ -5,10 +5,13 @@ import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
 import type { Rol } from '@/dto/Rol';
 import { obtenerMiUsuario } from '@/services/usuarioService';
+import { telefonoParaMostrar } from '@/utils/emergencia';
+import { tomarAvisoPendiente } from '@/utils/fuente-sintomas';
 import { mensajeDeError, tokenActual, type Cuenta } from '@/utils/sesion';
 import { nombreDiscapacidad, nombreRol } from '@/utils/textos';
 
 import { accionesComunesVoz, salir } from './acciones-cuenta';
+import { Aviso } from './aviso';
 import { Boton } from './boton';
 import { Encabezado } from './encabezado';
 import { EstadoCarga } from './estado-carga';
@@ -37,7 +40,7 @@ function datosDe(cuenta: Cuenta): { etiqueta: string; valor: string; icono: Nomb
                 {
                     etiqueta: 'Contacto de emergencia',
                     valor: contacto
-                        ? `${contacto.nombre}${contacto.parentesco ? ` (${contacto.parentesco})` : ''}, ${contacto.telefono}`
+                        ? `${contacto.nombre}${contacto.parentesco ? ` (${contacto.parentesco})` : ''}, ${telefonoParaMostrar(contacto.telefono)}`
                         : 'No registrado',
                     icono: 'contactoEmergencia' as const,
                 },
@@ -60,6 +63,7 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
     const [cuenta, setCuenta] = useState<Cuenta | null>(null);
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [aviso, setAviso] = useState<string | null>(null);
 
     const cargar = useCallback(async () => {
         setCargando(true);
@@ -76,6 +80,8 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
     useFocusEffect(
         useCallback(() => {
             void cargar();
+            // Al volver de cambiar el contacto de emergencia, se muestra el "Listo…"
+            setAviso(tomarAvisoPendiente());
         }, [cargar]),
     );
 
@@ -83,8 +89,11 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
 
     useComandosPantalla({
         titulo: 'Mi cuenta',
-        descripcion: 'Mi cuenta. Puedes decir: lee mis datos, cambiar contraseña o cerrar sesión.',
-        ejemplos: ['lee mis datos', 'cambiar contraseña', 'cerrar sesión'],
+        descripcion:
+            rol === 'USUARIO'
+                ? 'Mi cuenta. Puedes decir: lee mis datos, cambiar contacto de emergencia, cambiar contraseña o cerrar sesión.'
+                : 'Mi cuenta. Puedes decir: lee mis datos, cambiar contraseña o cerrar sesión.',
+        ejemplos: rol === 'USUARIO' ? ['lee mis datos', 'cambiar contacto de emergencia', 'cambiar contraseña', 'cerrar sesión'] : ['lee mis datos', 'cambiar contraseña', 'cerrar sesión'],
         campos: [],
         acciones: [
             {
@@ -92,6 +101,15 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
                 ejecutar: () =>
                     anunciar(cuenta ? ['Tus datos', ...datos.map((d) => `${d.etiqueta}: ${d.valor}`)].join('. ') : 'Todavía estoy cargando tus datos.'),
             },
+            ...(rol === 'USUARIO'
+                ? [
+                    {
+                        frases: ['cambiar contacto de emergencia', 'editar contacto de emergencia', 'mi contacto de emergencia', 'contacto de emergencia', 'registrar contacto de emergencia'],
+                        etiqueta: 'cambiar tu contacto de emergencia',
+                        ejecutar: () => router.push('/paciente/contacto-emergencia'),
+                    },
+                ]
+                : []),
             ...accionesComunesVoz(rol, anunciar),
         ],
     });
@@ -100,6 +118,8 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
         <FondoPantalla>
             <Encabezado alCerrarSesion={() => salir(anunciar)} icono="persona" titulo="Mi cuenta" subtitulo={cuenta?.nombre} />
 
+            {aviso && <Aviso tipo="exito" mensaje={aviso} />}
+
             <EstadoCarga cargando={cargando} error={error} reintentar={cargar} hayDatos={!!cuenta} />
 
             {cuenta && (
@@ -107,6 +127,14 @@ export function PantallaMiCuenta({ rol }: { rol: Rol }) {
                     {datos.map((d) => (
                         <FilaDato key={d.etiqueta} {...d} />
                     ))}
+                    {cuenta.rol === 'USUARIO' && (
+                        <Boton
+                            titulo={cuenta.contactoEmergencia ? 'Cambiar contacto de emergencia' : 'Registrar contacto de emergencia'}
+                            icono={cuenta.contactoEmergencia ? 'editar' : 'agregar'}
+                            variante="secundario"
+                            onPress={() => router.push('/paciente/contacto-emergencia')}
+                        />
+                    )}
                 </Tarjeta>
             )}
 

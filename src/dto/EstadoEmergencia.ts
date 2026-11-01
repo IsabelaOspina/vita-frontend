@@ -1,6 +1,6 @@
-
 export type EstadoEmergencia =
-  | "PENDIENTE"
-  | "ENVIADA"
-  | "ATENDIDA"
-  | "CANCELADA";
+    | "PENDIENTE"
+    | "ENVIADA"
+    | "FALLIDA"
+    | "ATENDIDA"
+    | "CANCELADA";

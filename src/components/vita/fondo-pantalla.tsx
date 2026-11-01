@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AnchoMaximo, Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 
+import { BotonAyudaFlotante, ESPACIO_AYUDA_FLOTANTE, useAyudaFlotanteVisible } from './boton-ayuda-flotante';
 import { IndicadorAsistente } from './indicador-asistente';
 
 type Props = {
@@ -15,13 +16,15 @@ type Props = {
 
 /**
  * Contenedor de pantalla: fondo con formas suaves, área segura,
- * desplazamiento y ajuste cuando aparece el teclado.
+ * desplazamiento y ajuste cuando aparece el teclado. En las pantallas del paciente lleva el botón
+ * flotante "Pedir ayuda".
  */
 export function FondoPantalla({ children, pie }: Props) {
     const { colores } = useAccesibilidad();
     // En celulares angostos (o con letra grande) los márgenes laterales son más pequeños, para que quepa el texto
     const { width } = useWindowDimensions();
     const margen = width < 380 ? Espacio.l : Espacio.xl;
+    const ayudaVisible = useAyudaFlotanteVisible();
 
     return (
         // overflow hidden: recorta las formas decorativas para que no generen scroll horizontal en web
@@ -32,16 +35,24 @@ export function FondoPantalla({ children, pie }: Props) {
 
             <SafeAreaView style={styles.raiz} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView style={styles.raiz} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                    <ScrollView
-                        contentContainerStyle={[styles.scroll, { paddingHorizontal: margen }]}
-                        keyboardShouldPersistTaps="handled"
-                        showsVerticalScrollIndicator={false}>
-                        <View style={styles.columna}>
-                            {/* Estado del asistente "Oye VITA" (solo se ve con el modo voz activo) */}
-                            <IndicadorAsistente />
-                            {children}
-                        </View>
-                    </ScrollView>
+                    <View style={styles.raiz}>
+                        <ScrollView
+                            contentContainerStyle={[
+                                styles.scroll,
+                                { paddingHorizontal: margen },
+                                // Espacio al final para que el botón flotante no tape lo último
+                                ayudaVisible && { paddingBottom: Espacio.xl + ESPACIO_AYUDA_FLOTANTE },
+                            ]}
+                            keyboardShouldPersistTaps="handled"
+                            showsVerticalScrollIndicator={false}>
+                            <View style={styles.columna}>
+                                {/* Estado del asistente "Oye VITA" (solo se ve con el modo voz activo) */}
+                                <IndicadorAsistente />
+                                {children}
+                            </View>
+                        </ScrollView>
+                        <BotonAyudaFlotante visible={ayudaVisible} />
+                    </View>
                     {pie && (
                         <View style={[styles.pie, { paddingHorizontal: margen }]}>
                             <View style={styles.columna}>{pie}</View>

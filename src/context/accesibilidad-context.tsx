@@ -5,7 +5,8 @@ import { EscalasTexto, Paletas, TamanoTexto, type Paleta, type VarianteTexto } f
 import { callar, hablar } from '@/utils/voz';
 
 /**
- * Preferencias de accesibilidad de la interfaz (alto contraste, tamaño de texto y modo voz).
+ * Preferencias de accesibilidad de la interfaz (alto contraste, tamaño de texto, modo voz y
+ * escucha de emergencia).
  * Se pueden cambiar antes de iniciar sesión, desde la barra del login.
  *
  * Modo voz: la app lee en voz alta (sin necesitar el lector de pantalla del celular) el nombre
@@ -29,6 +30,12 @@ type Accesibilidad = {
     cambiarTamanoTexto: (cambio: 'aumentar' | 'disminuir') => boolean;
     alternarModoVoz: () => void;
     /**
+     * Escucha de emergencia (paciente): con el modo voz apagado y VITA abierta, el micrófono
+     * queda atento solo a "pedir ayuda", "auxilio" o "emergencia". Viene activada.
+     */
+    escuchaEmergencia: boolean;
+    alternarEscuchaEmergencia: () => void;
+    /**
      * Comunica un mensaje importante (errores, éxito, cambios de ajustes).
      * Con modo voz lo dice en voz alta; sin modo voz se lo pasa al lector de pantalla del sistema.
      */
@@ -46,6 +53,7 @@ export function AccesibilidadProvider({ children }: { children: ReactNode }) {
     const [altoContraste, setAltoContraste] = useState(false);
     const [indiceEscala, setIndiceEscala] = useState(0);
     const [modoVoz, setModoVoz] = useState(false);
+    const [escuchaEmergencia, setEscuchaEmergencia] = useState(true);
 
     const escalaTexto = EscalasTexto[indiceEscala];
 
@@ -86,6 +94,16 @@ export function AccesibilidadProvider({ children }: { children: ReactNode }) {
                 callar();
                 AccessibilityInfo.announceForAccessibility('Modo voz desactivado');
             }
+        },
+        escuchaEmergencia,
+        alternarEscuchaEmergencia: () => {
+            const nueva = !escuchaEmergencia;
+            setEscuchaEmergencia(nueva);
+            anunciar(
+                nueva
+                    ? 'Escucha de emergencia activada. Con VITA abierta, di pedir ayuda o auxilio cuando lo necesites.'
+                    : 'Escucha de emergencia desactivada. Para pedir ayuda usa el botón rojo.',
+            );
         },
         anunciar,
         leer: (texto, esperar) => {
