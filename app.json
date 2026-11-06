@@ -48,6 +48,12 @@
           "microphonePermission": "VITA necesita acceso al micrófono para escuchar tus comandos de voz.",
           "speechRecognitionPermission": "VITA utiliza el reconocimiento de voz para comprender tus comandos."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "VITA usa tu ubicación solo cuando pides ayuda de emergencia, para enviársela a tu contacto."
+        }
       ]
     ],
     "experiments": {

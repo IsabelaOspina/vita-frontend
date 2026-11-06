@@ -54,6 +54,8 @@ const styles = StyleSheet.create({
     chip: {
         flexGrow: 1,
         flexBasis: '45%',
+        // En pantallas angostas cada opción ocupa toda la fila, para que palabras como "Cognitiva" no se corten
+        minWidth: 150,
         minHeight: 64,
         borderRadius: Radio.m,
         padding: Espacio.m,

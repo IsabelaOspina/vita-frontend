@@ -1,4 +1,3 @@
-
 import type { ContactoEmergenciaRequest } from "./ContactoEmergenciaRequest";
 import type { DiscapacidadRequest } from "./DiscapacidadRequest";
 import type { ConfiguracionAccesibilidadRequest } from "./ConfiguracionAccesibilidadRequest";
@@ -14,4 +13,5 @@ export interface UsuarioRequest {
   contactoEmergencia?: ContactoEmergenciaRequest;
   discapacidades?: DiscapacidadRequest[];
   configuracionAccesibilidad?: ConfiguracionAccesibilidadRequest;
+  aceptaTratamientoDatosPersonales: boolean;
 }

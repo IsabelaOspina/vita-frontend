@@ -2,11 +2,14 @@ import { datosCambiaron } from "../utils/cambios-de-datos";
 
 export class ApiError extends Error {
   status: number;
+  /** Lo que respondió el backend (por ejemplo `segundosRestantes` cuando el inicio de sesión está bloqueado). */
+  datos?: Record<string, unknown>;
 
-  constructor(mensaje: string, status: number) {
+  constructor(mensaje: string, status: number, datos?: Record<string, unknown>) {
     super(mensaje);
     this.name = "ApiError";
     this.status = status;
+    this.datos = datos;
   }
 }
 
@@ -157,7 +160,11 @@ export async function apiRequest<T>(
       }
     }
 
-    throw new ApiError(mensaje, respuesta.status);
+    throw new ApiError(
+        mensaje,
+        respuesta.status,
+        datos && typeof datos === "object" ? (datos as Record<string, unknown>) : undefined
+    );
   }
 
   return datos as T;

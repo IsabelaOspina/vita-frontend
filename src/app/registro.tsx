@@ -1,5 +1,5 @@
-import { Link, router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { Link, router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, type TextInput } from 'react-native';
 
 import { Aviso } from '@/components/vita/aviso';
@@ -8,6 +8,7 @@ import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { ChipSeleccion } from '@/components/vita/chip-seleccion';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
 import { Icono, type NombreIcono } from '@/components/vita/icono';
+import { RequisitosContrasena } from '@/components/vita/requisitos-contrasena';
 import { Texto } from '@/components/vita/texto';
 import { Espacio, Radio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
@@ -17,6 +18,8 @@ import type { ContactoEmergenciaRequest } from '@/dto/ContactoEmergenciaRequest'
 import type { UsuarioRequest } from '@/dto/UsuarioRequest';
 import { ApiError } from '@/services/api';
 import { registrarUsuario } from '@/services/usuarioService';
+import { REQUISITOS_CONTRASENA_VOZ } from '@/utils/politica-contrasena';
+import { tomarAceptacionDeLaPolitica } from '@/utils/politica-datos';
 import { campoDelError } from '@/utils/textos';
 import { errorCedula, errorContrasena, errorCorreo, errorNombre, errorParentesco, errorTelefono } from '@/utils/validaciones';
 
@@ -46,8 +49,11 @@ function mensajeDeError(e: unknown): string {
 }
 
 type Errores = Partial<
-    Record<'nombre' | 'cedula' | 'correo' | 'contrasena' | 'contactoNombre' | 'contactoTelefono' | 'contactoParentesco', string>
+    Record<'nombre' | 'cedula' | 'correo' | 'contrasena' | 'contactoNombre' | 'contactoTelefono' | 'contactoParentesco' | 'politica', string>
 >;
+
+const ERROR_POLITICA =
+    'Para crear tu cuenta debes aceptar la política de tratamiento de datos personales. Marca la casilla o di: acepto la política.';
 
 function validar(d: Pick<UsuarioRequest, 'nombre' | 'cedula' | 'correo' | 'contrasena'>): Errores {
     const errores: Errores = {};
@@ -88,6 +94,7 @@ export default function RegistroScreen() {
     const [contactoTelefono, setContactoTelefono] = useState('');
     const [contactoParentesco, setContactoParentesco] = useState('');
     const [discapacidades, setDiscapacidades] = useState<TipoDiscapacidad[]>([]);
+    const [aceptaPolitica, setAceptaPolitica] = useState(false);
     const [errores, setErrores] = useState<Errores>({});
     const [errorGeneral, setErrorGeneral] = useState<string | null>(null);
     const [cargando, setCargando] = useState(false);
@@ -109,6 +116,19 @@ export default function RegistroScreen() {
 
     const volver = () => (router.canGoBack() ? router.back() : router.replace('/login'));
 
+    const cambiarPolitica = (aceptar: boolean) => {
+        setAceptaPolitica(aceptar);
+        if (aceptar) setErrores((e) => (e.politica ? { ...e, politica: undefined } : e));
+    };
+    const verPolitica = () => router.push({ pathname: '/politica-datos', params: { desdeRegistro: '1' } });
+
+    // Al volver de la política tocando "Acepto la política", la casilla queda marcada
+    useFocusEffect(
+        useCallback(() => {
+            if (tomarAceptacionDeLaPolitica()) cambiarPolitica(true);
+        }, []),
+    );
+
     /** Marca o quita una discapacidad sin hablar (el asistente da su propia confirmación). */
     const cambiarDiscapacidad = (tipo: TipoDiscapacidad, marcar: boolean) => {
         setDiscapacidades((actuales) =>
@@ -123,7 +143,8 @@ export default function RegistroScreen() {
             parentesco: contactoParentesco.trim(),
         };
         const hayContacto = Boolean(contacto.nombre || contacto.telefono || contacto.parentesco);
-        const encontrados = { ...validar({ nombre, cedula, correo, contrasena }), ...validarContacto(contacto) };
+        const encontrados: Errores = { ...validar({ nombre, cedula, correo, contrasena }), ...validarContacto(contacto) };
+        if (!aceptaPolitica) encontrados.politica = ERROR_POLITICA;
         setErrores(encontrados);
         setErrorGeneral(null);
         if (Object.keys(encontrados).length > 0) {
@@ -142,12 +163,14 @@ export default function RegistroScreen() {
                 // Si la sección de contacto quedó vacía, no se envía
                 contactoEmergencia: hayContacto ? contacto : undefined,
                 discapacidades: discapacidades.map((tipo) => ({ tipo })),
+                aceptaTratamientoDatosPersonales: aceptaPolitica,
             });
             router.replace({ pathname: '/login', params: { correo: correo.trim(), registrado: '1' } });
         } catch (e) {
             const mensaje = mensajeDeError(e);
             // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
             const campo = campoDelError<keyof Errores>(mensaje, [
+                [/tratamiento/i, 'politica'],
                 [/correo/i, 'correo'],
                 [/c[eé]dula/i, 'cedula'],
                 [/contrase/i, 'contrasena'],
@@ -178,7 +201,8 @@ export default function RegistroScreen() {
         titulo: 'Crear cuenta',
         descripcion:
             'Crear cuenta. Llena tu nombre completo, cédula, correo y una contraseña. ' +
-            'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad.',
+            'Después puedes agregar un contacto de emergencia e indicar si tienes alguna discapacidad. ' +
+            'Para crear la cuenta debes aceptar la política de tratamiento de datos: di acepto la política, o leer la política para escucharla.',
         ejemplos: [
             'mi nombre es María Gómez y mi cédula es 1 0 9 4',
             'mi correo es maría arroba gmail punto com y mi contraseña es girasol 2026',
@@ -186,6 +210,8 @@ export default function RegistroScreen() {
             'teléfono del contacto 300 123 4567',
             'quiero agregar un contacto de emergencia',
             'tengo discapacidad visual',
+            'acepto la política',
+            'leer la política',
             'crear cuenta',
         ],
         campos: [
@@ -216,7 +242,7 @@ export default function RegistroScreen() {
             {
                 claves: ['contrasena', 'clave'],
                 etiqueta: 'Contraseña',
-                pregunta: '¿Qué contraseña quieres? Debe tener al menos 8 caracteres.',
+                pregunta: `¿Qué contraseña quieres? ${REQUISITOS_CONTRASENA_VOZ}`,
                 tipo: 'contrasena',
                 valor: contrasena,
                 asignar: setContrasena,
@@ -267,12 +293,20 @@ export default function RegistroScreen() {
                 opcional: true,
             },
         ],
-        opciones: DISCAPACIDADES.map((d) => ({
-            claves: d.tipo === 'DEL_HABLA' ? ['del habla', 'habla'] : [d.titulo.toLowerCase()],
-            etiqueta: `Discapacidad ${d.titulo.toLowerCase()}`,
-            marcada: discapacidades.includes(d.tipo),
-            cambiar: (marcar: boolean) => cambiarDiscapacidad(d.tipo, marcar),
-        })),
+        opciones: [
+            ...DISCAPACIDADES.map((d) => ({
+                claves: d.tipo === 'DEL_HABLA' ? ['del habla', 'habla'] : [d.titulo.toLowerCase()],
+                etiqueta: `Discapacidad ${d.titulo.toLowerCase()}`,
+                marcada: discapacidades.includes(d.tipo),
+                cambiar: (marcar: boolean) => cambiarDiscapacidad(d.tipo, marcar),
+            })),
+            {
+                claves: ['acepto la politica', 'aceptar la politica', 'acepto el tratamiento', 'acepto la politica de datos', 'acepto los terminos'],
+                etiqueta: 'Acepto la política de tratamiento de datos',
+                marcada: aceptaPolitica,
+                cambiar: cambiarPolitica,
+            },
+        ],
         // Al terminar los datos obligatorios, el asistente ofrece los opcionales antes de crear la cuenta
         pasosOpcionales: [
             {
@@ -287,6 +321,11 @@ export default function RegistroScreen() {
         ],
         acciones: [
             { frases: ['crear cuenta', 'crear mi cuenta', 'registrarme', 'enviar', 'terminar'], etiqueta: 'crear la cuenta', ejecutar: enviar },
+            {
+                frases: ['leer la politica', 'ver la politica', 'lee la politica', 'abrir la politica', 'politica de datos', 'politica de tratamiento'],
+                etiqueta: 'ver la política de tratamiento de datos',
+                ejecutar: verPolitica,
+            },
             { frases: ['iniciar sesion', 'ya tengo cuenta', 'ir al inicio de sesion'], ejecutar: () => router.replace('/login') },
             { frases: ['volver', 'atras', 'regresar'], ejecutar: volver },
         ],
@@ -375,8 +414,7 @@ export default function RegistroScreen() {
                         etiqueta="Contraseña"
                         obligatorio
                         icono="candado"
-                        placeholder="Crea una contraseña"
-                        ayuda="Mínimo 8 caracteres"
+                        placeholder="Crea una contraseña segura"
                         value={contrasena}
                         onChangeText={setContrasena}
                         error={errores.contrasena}
@@ -385,6 +423,7 @@ export default function RegistroScreen() {
                         textContentType="newPassword"
                         returnKeyType="done"
                     />
+                    <RequisitosContrasena valor={contrasena} />
                 </View>
 
                 <View style={estiloTarjeta}>
@@ -467,6 +506,38 @@ export default function RegistroScreen() {
                     </View>
                 </View>
 
+                <View style={estiloTarjeta}>
+                    <Pressable
+                        onPress={() => cambiarPolitica(!aceptaPolitica)}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: aceptaPolitica }}
+                        accessibilityLabel="Acepto la política de tratamiento de datos personales"
+                        accessibilityHint={errores.politica}
+                        hitSlop={6}
+                        style={({ pressed }) => [styles.casilla, pressed && { opacity: 0.7 }]}>
+                        <Icono
+                            nombre={aceptaPolitica ? 'casillaMarcada' : 'casilla'}
+                            tamano={30}
+                            color={errores.politica ? colores.error : colores.primario}
+                        />
+                        <Texto variante="cuerpo" peso="700" style={styles.textoTitulo}>
+                            Acepto la política de tratamiento de datos personales <Texto variante="cuerpo" color="error">*</Texto>
+                        </Texto>
+                    </Pressable>
+                    <Pressable
+                        onPress={verPolitica}
+                        accessibilityRole="link"
+                        accessibilityLabel="Leer la política de tratamiento de datos personales"
+                        hitSlop={8}
+                        style={styles.enlacePolitica}>
+                        <Icono nombre="documento" tamano={22} color={colores.primario} />
+                        <Texto variante="cuerpo" color="primario" peso="700" style={[styles.subrayado, styles.textoTitulo]}>
+                            Leer la política de tratamiento de datos
+                        </Texto>
+                    </Pressable>
+                    {errores.politica && <Aviso mensaje={errores.politica} />}
+                </View>
+
                 <NotaCamposObligatorios />
                 <Boton titulo="Crear cuenta" icono="check" onPress={enviar} cargando={cargando} />
                 {errorGeneral && <Aviso mensaje={errorGeneral} />}
@@ -536,6 +607,18 @@ const styles = StyleSheet.create({
     },
     tituloSeccion: {
         gap: Espacio.xs,
+    },
+    casilla: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Espacio.m,
+        minHeight: 48,
+    },
+    enlacePolitica: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Espacio.s,
+        paddingVertical: Espacio.xs,
     },
     chips: {
         flexDirection: 'row',

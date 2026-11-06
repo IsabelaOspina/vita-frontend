@@ -42,7 +42,8 @@ export function accionesComunesVoz(rol: Rol, anunciar: (mensaje: string) => void
                     ejecutar: () => router.navigate({ pathname: '/paciente/emergencia', params: { tipo: 'OTRA', enviar: String(Date.now()) } }),
                 },
                 {
-                    frases: ['emergencia', 'pedir ayuda', 'necesito ayuda', 'auxilio', 'socorro', 'tengo una emergencia', 'sos'],
+                    // "Ayuda" sola también es emergencia; la ayuda para usar VITA es "cómo funciona" o "qué puedo decir"
+                    frases: ['emergencia', 'pedir ayuda', 'necesito ayuda', 'auxilio', 'socorro', 'tengo una emergencia', 'sos', 'ayuda', 'ayudame', 'ayudenme', 'ayuda por favor'],
                     etiqueta: 'pedir ayuda de emergencia',
                     ejecutar: () => router.navigate('/paciente/emergencia'),
                 },

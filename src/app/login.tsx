@@ -27,6 +27,28 @@ function mensajeDeError(e: unknown): string {
 
 type Errores = { correo?: string; contrasena?: string };
 
+/**
+ * Bloqueo temporal del inicio de sesión (lo decide el backend): a los 3 intentos fallidos se
+ * bloquea 1 minuto, luego 5 y luego 30. Se guarda por correo y fuera del componente para que
+ * siga contando aunque se salga de la pantalla y se vuelva.
+ */
+const bloqueos = new Map<string, number>();
+
+const claveBloqueo = (correo: string) => correo.trim().toLowerCase();
+
+/** "4:05" */
+function relojEspera(segundos: number) {
+    return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+}
+
+/** "4 minutos y 5 segundos", para leerlo en voz alta. */
+function esperaEnPalabras(segundos: number) {
+    const m = Math.floor(segundos / 60);
+    const s = segundos % 60;
+    const partes = [m ? `${m} ${m === 1 ? 'minuto' : 'minutos'}` : '', s ? `${s} ${s === 1 ? 'segundo' : 'segundos'}` : ''].filter(Boolean);
+    return partes.join(' y ') || '1 segundo';
+}
+
 function validar(correo: string, contrasena: string): Errores {
     const errores: Errores = {};
     if (!correo.trim()) errores.correo = 'Escribe tu correo';
@@ -67,7 +89,35 @@ export default function LoginScreen() {
     const [cargando, setCargando] = useState(false);
     const contrasenaRef = useRef<TextInput>(null);
 
+    // ----- Bloqueo temporal ----------------------------------------------------------------------
+    const [ahora, setAhora] = useState(() => Date.now());
+    const bloqueadoHasta = bloqueos.get(claveBloqueo(correo)) ?? 0;
+    const segundosBloqueo = Math.max(0, Math.ceil((bloqueadoHasta - ahora) / 1000));
+    const bloqueado = segundosBloqueo > 0;
+
+    // Mientras está bloqueado, la cuenta regresiva avanza cada segundo
+    useEffect(() => {
+        if (!bloqueado) return;
+        const intervalo = setInterval(() => setAhora(Date.now()), 1000);
+        return () => clearInterval(intervalo);
+    }, [bloqueado]);
+
+    // Se avisa (también en voz alta) cuando ya se puede volver a intentar
+    const estabaBloqueado = useRef(false);
+    useEffect(() => {
+        if (estabaBloqueado.current && !bloqueado) {
+            bloqueos.delete(claveBloqueo(correo));
+            anunciar('Ya puedes intentar iniciar sesión de nuevo.');
+        }
+        estabaBloqueado.current = bloqueado;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bloqueado]);
+
     const enviar = async () => {
+        if (bloqueado) {
+            anunciar(`El inicio de sesión está bloqueado por seguridad. Podrás intentarlo de nuevo en ${esperaEnPalabras(segundosBloqueo)}.`);
+            return;
+        }
         const encontrados = validar(correo, contrasena);
         setErrores(encontrados);
         setErrorGeneral(null);
@@ -88,6 +138,19 @@ export default function LoginScreen() {
             // Cada rol tiene su pantalla principal: paciente, personal de salud o administrador
             router.replace(rutaDeInicio(respuesta.usuario.rol));
         } catch (e) {
+            // Demasiados intentos: el backend responde 429 con los segundos que faltan
+            if (e instanceof ApiError && e.status === 429) {
+                const segundos = Number(e.datos?.segundosRestantes) || 60;
+                bloqueos.set(claveBloqueo(correo), Date.now() + segundos * 1000);
+                setAhora(Date.now());
+                setContrasena('');
+                setErrores({});
+                anunciar(
+                    `Por seguridad bloqueamos el inicio de sesión de esta cuenta. Podrás intentarlo de nuevo en ${esperaEnPalabras(segundos)}. ` +
+                    'Si no recuerdas tu contraseña, di: olvidé mi contraseña.',
+                );
+                return;
+            }
             const mensaje = mensajeDeError(e);
             // El error va debajo del campo que lo causó; si no es de un campo, debajo del botón
             const campo = campoDelError<keyof Errores>(mensaje, [
@@ -106,11 +169,13 @@ export default function LoginScreen() {
     // Lo que el asistente "Oye VITA" puede hacer en esta pantalla
     useComandosPantalla({
         titulo: 'Inicio de sesión',
-        descripcion: cuentaCreada
-            ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
-            : contrasenaRestablecida
-              ? 'Tu contraseña se actualizó. Ahora inicia sesión con tu correo y la nueva contraseña.'
-              : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA. Si olvidaste tu contraseña, di: olvidé mi contraseña.',
+        descripcion: bloqueado
+            ? `Inicio de sesión. Por seguridad, el inicio de sesión está bloqueado. Podrás intentarlo de nuevo en ${esperaEnPalabras(segundosBloqueo)}. Si olvidaste tu contraseña, di: olvidé mi contraseña.`
+            : cuentaCreada
+                ? 'Tu cuenta fue creada. Ahora inicia sesión con tu correo y contraseña.'
+                : contrasenaRestablecida
+                    ? 'Tu contraseña se actualizó. Ahora inicia sesión con tu correo y la nueva contraseña.'
+                    : 'Inicio de sesión. Escribe tu correo y tu contraseña, o díctalos con Oye VITA. Si olvidaste tu contraseña, di: olvidé mi contraseña.',
         ejemplos: [
             'mi correo es isabela arroba gmail punto com',
             'mi contraseña es, y la dices',
@@ -231,8 +296,25 @@ export default function LoginScreen() {
                     </Texto>
                 </Pressable>
 
-                <Boton titulo="Iniciar sesión" icono="siguiente" onPress={enviar} cargando={cargando} />
-                {errorGeneral && <Aviso mensaje={errorGeneral} />}
+                <Boton
+                    titulo={bloqueado ? `Espera ${relojEspera(segundosBloqueo)}` : 'Iniciar sesión'}
+                    icono={bloqueado ? 'reloj' : 'siguiente'}
+                    onPress={enviar}
+                    cargando={cargando}
+                    deshabilitado={bloqueado}
+                    pista={bloqueado ? `Bloqueado por seguridad. Podrás intentarlo de nuevo en ${esperaEnPalabras(segundosBloqueo)}` : undefined}
+                />
+                {bloqueado ? (
+                    <View style={styles.bloqueo}>
+                        <Aviso mensaje="Por seguridad bloqueamos el inicio de sesión de esta cuenta después de varios intentos fallidos." />
+                        {/* La cuenta regresiva no se anuncia cada segundo: se lee al tocar el botón o con el modo voz */}
+                        <Texto variante="cuerpo" peso="700" centrado accessibilityLiveRegion="none">
+                            Podrás intentarlo de nuevo en {relojEspera(segundosBloqueo)}
+                        </Texto>
+                    </View>
+                ) : (
+                    errorGeneral && <Aviso mensaje={errorGeneral} />
+                )}
             </View>
 
             <View style={styles.registro}>
@@ -286,6 +368,9 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-end',
         marginTop: -Espacio.s,
         paddingVertical: Espacio.xs,
+    },
+    bloqueo: {
+        gap: Espacio.s,
     },
     espacioFlexible: {
         flexGrow: 1,

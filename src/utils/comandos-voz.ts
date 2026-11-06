@@ -53,7 +53,7 @@ export type PantallaVoz = {
      * la descripción se lee cuando termine de cargar (así no se dice "tienes 0" antes de tiempo).
      */
     cargando?: boolean;
-    /** Ejemplos de órdenes para esta pantalla, que se leen con "ayuda". */
+    /** Ejemplos de órdenes para esta pantalla, que se leen con "qué puedo decir". */
     ejemplos: string[];
     campos: CampoVoz[];
     opciones?: OpcionVoz[];
@@ -420,6 +420,29 @@ const ANTES_DE_ACCION = /^(?:(?:quiero|puedes|podrias|por favor|favor|vamos a|vo
 /** Palabras que pueden ir entre la orden y el nombre: "desactiva a la cuenta de Ana". */
 const ANTES_DE_NOMBRE = /^(?:(?:a|al|la|el|los|las|de|del|cuenta|cuentas|paciente|profesional|doctor|doctora|usuario|usuaria|numero)\s+)*/;
 
+/**
+ * Frases para pedir ayuda sobre cómo usar VITA. Son distintas a las de emergencia ("ayuda",
+ * "pedir ayuda", "necesito ayuda", "auxilio"…), para que el asistente nunca las confunda.
+ */
+export const FRASES_AYUDA_APP = [
+    'como funciona',
+    'como se usa',
+    'como uso',
+    'como utilizo',
+    'que puedo decir',
+    'que puedo hacer',
+    'que hago aqui',
+    'que hago',
+    'instrucciones',
+    'explicame',
+    'guiame',
+    'tutorial',
+    'ayuda con la aplicacion',
+    'ayuda con la app',
+    'ayuda para usar',
+    'ayuda de la aplicacion',
+];
+
 /** "desactiva a Ana Gómez", "ver el número 2": acción sobre un elemento de una lista. */
 function interpretarElemento(palabras: string, pantalla: PantallaVoz): Resultado | null {
     const sinCortesia = palabras.replace(ANTES_DE_ACCION, '');
@@ -490,10 +513,12 @@ export function interpretar(orden: string, pantalla: PantallaVoz | null): Result
     }
 
     // 2. Órdenes que sirven en cualquier pantalla
-    if (contieneAlguna(palabras, ['mas ayuda', 'mas opciones', 'otras opciones', 'todas las opciones', 'que mas puedo decir', 'comandos'])) {
+    //    "Ayuda" sola NO es la ayuda de la app: para el paciente es pedir ayuda de emergencia
+    //    (ver accionesComunesVoz). La ayuda para usar VITA se pide con estas frases.
+    if (contieneAlguna(palabras, ['mas opciones', 'otras opciones', 'todas las opciones', 'que mas puedo decir', 'comandos', 'todos los comandos'])) {
         return { tipo: 'masAyuda' };
     }
-    if (contieneAlguna(palabras, ['ayuda', 'ayudame', 'que puedo decir', 'que puedo hacer', 'que hago', 'guiame'])) {
+    if (contieneAlguna(palabras, FRASES_AYUDA_APP)) {
         return { tipo: 'ayuda' };
     }
     if (contieneAlguna(palabras, ['callate', 'silencio', 'detente', 'cancelar', 'basta'])) {
@@ -560,7 +585,11 @@ export function interpretar(orden: string, pantalla: PantallaVoz | null): Result
     const indice = pantalla.acciones.findIndex((a) => contieneAlguna(palabras, a.frases));
     if (indice >= 0) return { tipo: 'accion', accion: pantalla.acciones[indice], indice };
 
-    // 5. Último intento, tolerando letras mal reconocidas
+    // 5. "Ayuda" en una pantalla sin emergencias (inicio de sesión, registro, personal de salud,
+    //    administrador): ahí no hay alerta que enviar, así que se explica cómo usar la pantalla
+    if (contieneAlguna(palabras, ['ayuda', 'ayudame', 'ayudenme'])) return { tipo: 'ayuda' };
+
+    // 6. Último intento, tolerando letras mal reconocidas
     return interpretarParecido(original, pantalla) ?? { tipo: 'noEntendido', texto: original };
 }
 

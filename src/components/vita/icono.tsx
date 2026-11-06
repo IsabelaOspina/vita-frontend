@@ -61,6 +61,12 @@ const ICONOS = {
     campana: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
     ubicacion: { ios: 'mappin.and.ellipse', android: 'location_on', web: 'location_on' },
     cancelar: { ios: 'xmark.circle', android: 'cancel', web: 'cancel' },
+    circulo: { ios: 'circle', android: 'radio_button_unchecked', web: 'radio_button_unchecked' },
+    circuloCheck: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' },
+    casilla: { ios: 'square', android: 'check_box_outline_blank', web: 'check_box_outline_blank' },
+    casillaMarcada: { ios: 'checkmark.square.fill', android: 'check_box', web: 'check_box' },
+    documento: { ios: 'doc.text.fill', android: 'description', web: 'description' },
+    miUbicacion: { ios: 'location.fill', android: 'my_location', web: 'my_location' },
 } satisfies Record<string, SymbolViewProps['name']>;
 
 export type NombreIcono = keyof typeof ICONOS;

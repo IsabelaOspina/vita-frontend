@@ -8,6 +8,7 @@ import { Boton } from '@/components/vita/boton';
 import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { Encabezado } from '@/components/vita/encabezado';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
+import { RequisitosContrasena } from '@/components/vita/requisitos-contrasena';
 import { Tarjeta } from '@/components/vita/tarjeta';
 import { Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
@@ -15,7 +16,8 @@ import { useComandosPantalla } from '@/context/asistente-context';
 import { crearPersonal } from '@/services/adminUsuarioService';
 import { mensajeDeError, tokenActual } from '@/utils/sesion';
 import { campoDelError } from '@/utils/textos';
-import { errorCedula, errorCorreo, errorNombre, errorTelefono } from '@/utils/validaciones';
+import { REQUISITOS_CONTRASENA_VOZ } from '@/utils/politica-contrasena';
+import { errorCedula, errorContrasena, errorCorreo, errorNombre, errorTelefono } from '@/utils/validaciones';
 
 type Errores = Partial<Record<'nombre' | 'cedula' | 'correo' | 'telefono' | 'especialidad' | 'registro' | 'contrasena', string>>;
 
@@ -42,7 +44,8 @@ function validar(d: {
     else if (d.especialidad.trim().length > 100) errores.especialidad = 'La especialidad admite máximo 100 caracteres';
     if (!d.registro.trim()) errores.registro = 'Escribe el número de registro profesional';
     else if (d.registro.trim().length > 50) errores.registro = 'El número de registro admite máximo 50 caracteres';
-    if (d.contrasena.length < 8) errores.contrasena = 'La contraseña debe tener al menos 8 caracteres';
+    const eContrasena = errorContrasena(d.contrasena, 'Escribe una contraseña temporal');
+    if (eContrasena) errores.contrasena = eContrasena;
     return errores;
 }
 
@@ -182,7 +185,7 @@ export default function NuevoPersonalScreen() {
             {
                 claves: ['contrasena temporal', 'contrasena', 'clave'],
                 etiqueta: 'Contraseña temporal',
-                pregunta: '¿Qué contraseña temporal le pongo? Debe tener al menos 8 caracteres.',
+                pregunta: `¿Qué contraseña temporal le pongo? ${REQUISITOS_CONTRASENA_VOZ}`,
                 tipo: 'contrasena',
                 valor: contrasena,
                 asignar: setContrasena,
@@ -303,7 +306,7 @@ export default function NuevoPersonalScreen() {
                     etiqueta="Contraseña temporal"
                     obligatorio
                     icono="candado"
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Ej: Vita2026!"
                     ayuda="El profesional podrá cambiarla después de iniciar sesión."
                     value={contrasena}
                     onChangeText={setContrasena}
@@ -312,6 +315,7 @@ export default function NuevoPersonalScreen() {
                     returnKeyType="go"
                     onSubmitEditing={registrar}
                 />
+                <RequisitosContrasena valor={contrasena} />
             </Tarjeta>
 
             <View style={styles.botones}>

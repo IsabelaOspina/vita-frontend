@@ -1,4 +1,5 @@
 import { interpretarHora } from './salud';
+import { errorPoliticaContrasena } from './politica-contrasena';
 
 /**
  * Las mismas reglas que valida el backend (UsuarioRequest, PersonalRequest y ContactoEmergenciaRequest),
@@ -48,10 +49,12 @@ export function errorCorreo(valor: string, obligatorio = 'El correo es obligator
     return null;
 }
 
-/** Contraseña: al menos 8 caracteres. */
-export function errorContrasena(valor: string): string | null {
-    if (valor.length < 8) return 'La contraseña debe tener al menos 8 caracteres';
-    return null;
+/**
+ * Contraseña: la política del backend (mínimo 8 caracteres, mayúscula, minúscula, número y
+ * carácter especial). El mensaje dice exactamente qué le falta.
+ */
+export function errorContrasena(valor: string, vacia = 'Escribe una contraseña'): string | null {
+    return errorPoliticaContrasena(valor, { vacia });
 }
 
 /** Ejemplo que se muestra cuando la hora no es válida. */

@@ -21,6 +21,7 @@ import {
 import { fechaHoraLarga } from '@/utils/fechas';
 import { tomarAvisoPendiente } from '@/utils/fuente-sintomas';
 import { mensajeDeError } from '@/utils/sesion';
+import { abrirAjustesUbicacion, enlaceMapa, obtenerUbicacionActual, type Coordenadas, type UbicacionObtenida } from '@/utils/ubicacion';
 
 import { accionesComunesVoz } from './acciones-cuenta';
 import { Aviso } from './aviso';
@@ -59,7 +60,7 @@ function llamar(numero: string) {
 function mensajeDelResultado(r: SolicitudEmergenciaResponse): string {
     const nombre = r.nombreContacto ?? 'tu contacto de emergencia';
     if (r.estado === 'ENVIADA' || r.estado === 'ATENDIDA') {
-        return `Listo. Le enviamos un mensaje de texto a ${nombre} avisándole que necesitas ayuda${r.ubicacion ? ` y dónde estás` : ''}. Si es grave, llama también al ${LINEA_EMERGENCIAS}.`;
+        return `Listo. Le enviamos un mensaje de texto a ${nombre} avisándole que necesitas ayuda${r.ubicacion || r.latitud != null ? ` y dónde estás` : ''}. Si es grave, llama también al ${LINEA_EMERGENCIAS}.`;
     }
     return `No pudimos enviar el mensaje a ${nombre}. Llámalo tú${r.telefonoContacto ? ` al ${telefonoParaMostrar(r.telefonoContacto)}` : ''}, o llama al ${LINEA_EMERGENCIAS}.`;
 }
@@ -89,6 +90,19 @@ export function PantallaEmergencia() {
     const [marcando, setMarcando] = useState<number | null>(null);
     const [avisoExito, setAvisoExito] = useState<string | null>(null);
 
+    // ----- Ubicación ---------------------------------------------------------------------------
+    // Al entrar se pide permiso y se busca la ubicación. Si la persona acepta, se envían las
+    // coordenadas (el SMS lleva un enlace de Google Maps) y la dirección se escribe sola en
+    // "¿Dónde estás?". Si no acepta, se puede escribir a mano o enviar solo con el nombre.
+    type EstadoUbicacion = 'buscando' | UbicacionObtenida['estado'] | 'quitada';
+    const [estadoUbicacion, setEstadoUbicacion] = useState<EstadoUbicacion>('buscando');
+    const [puedePreguntarUbicacion, setPuedePreguntarUbicacion] = useState(true);
+    const coordenadasRef = useRef<Coordenadas | null>(null);
+    const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
+    const busquedaRef = useRef<Promise<void> | null>(null);
+    /** Si la persona ya escribió dónde está, la dirección detectada no le borra lo que escribió. */
+    const escribioUbicacionRef = useRef(false);
+
     const enviandoRef = useRef(false);
     /** La última orden de voz ya enviada (para no repetirla al volver a esta pantalla). */
     const ultimaOrdenDeVoz = useRef<string | undefined>(undefined);
@@ -111,6 +125,43 @@ export function PantallaEmergencia() {
         }
     }, []);
 
+    const buscarUbicacion = useCallback(() => {
+        setEstadoUbicacion('buscando');
+        const busqueda = obtenerUbicacionActual().then((u) => {
+            if (busquedaRef.current !== busqueda) return; // llegó una búsqueda más nueva
+            setEstadoUbicacion(u.estado);
+            if (u.estado === 'lista') {
+                coordenadasRef.current = u.coordenadas;
+                setCoordenadas(u.coordenadas);
+                if (u.direccion && !escribioUbicacionRef.current) setUbicacion(u.direccion);
+            } else {
+                coordenadasRef.current = null;
+                setCoordenadas(null);
+                if (u.estado === 'sinPermiso') setPuedePreguntarUbicacion(u.puedePreguntarDeNuevo);
+            }
+        });
+        busquedaRef.current = busqueda;
+        return busqueda;
+    }, []);
+
+    const quitarUbicacion = () => {
+        busquedaRef.current = null;
+        coordenadasRef.current = null;
+        setCoordenadas(null);
+        setEstadoUbicacion('quitada');
+        anunciar('Listo, no enviaremos tu ubicación exacta.');
+    };
+
+    const usarUbicacion = () => {
+        // Si el permiso se negó para siempre, solo se puede activar en los ajustes del celular
+        if (estadoUbicacion === 'sinPermiso' && !puedePreguntarUbicacion) {
+            anunciar('Activa el permiso de ubicación de VITA en los ajustes del celular.');
+            abrirAjustesUbicacion();
+            return;
+        }
+        void buscarUbicacion();
+    };
+
     useFocusEffect(
         useCallback(() => {
             // Cada visita empieza limpia: sin el resultado ni la confirmación de la vez anterior
@@ -118,6 +169,10 @@ export function PantallaEmergencia() {
             setConfirmando(null);
             setError(null);
             setUbicacion('');
+            escribioUbicacionRef.current = false;
+            coordenadasRef.current = null;
+            setCoordenadas(null);
+            void buscarUbicacion();
             void cargar();
             // Al volver de registrar el contacto, se muestra el "Listo…"
             setAvisoExito(tomarAvisoPendiente());
@@ -129,7 +184,7 @@ export function PantallaEmergencia() {
                 setConfirmando(null);
                 setError(null);
             };
-        }, [cargar]),
+        }, [cargar, buscarUbicacion]),
     );
 
     // Se pidió ayuda otra vez estando ya en esta pantalla: empieza limpia
@@ -167,7 +222,17 @@ export function PantallaEmergencia() {
         setEnviando(tipo);
         anunciar(`Enviando alerta de ${nombreTipoEmergencia(tipo).toLowerCase()} a ${contacto.nombre}.`);
         try {
-            const r = await solicitarEmergencia({ tipo, ubicacion: lugar.trim() || null });
+            // Si la ubicación todavía se está buscando, se espera un poco (nunca más de 6 segundos)
+            if (busquedaRef.current) {
+                await Promise.race([busquedaRef.current, new Promise((r) => setTimeout(r, 6000))]);
+            }
+            const c = coordenadasRef.current;
+            const r = await solicitarEmergencia({
+                tipo,
+                ubicacion: lugar.trim() || null,
+                latitud: c?.latitud ?? null,
+                longitud: c?.longitud ?? null,
+            });
             setResultado(r);
             setAnteriores((lista) => [r, ...lista.filter((x) => x.id !== r.id)]);
             anunciar(mensajeDelResultado(r));
@@ -217,9 +282,15 @@ export function PantallaEmergencia() {
         pregunta: '¿Dónde estás? Por ejemplo: en mi casa, calle 10 número 5 20.',
         tipo: 'texto',
         valor: ubicacion,
-        asignar: (v) => setUbicacion(v.charAt(0).toUpperCase() + v.slice(1)),
+        asignar: (v) => {
+            escribioUbicacionRef.current = true;
+            setUbicacion(v.charAt(0).toUpperCase() + v.slice(1));
+        },
         opcional: true,
     };
+
+    /** Lo que se comparte con el contacto, para el aviso de privacidad. */
+    const seCompartira = coordenadas ? 'tu nombre y tu ubicación' : ubicacion.trim() ? 'tu nombre y el lugar que escribiste' : 'tu nombre';
 
     // "Emergencia médica", "tuve un accidente, estoy en mi casa": se envía de una vez.
     // "Estoy en el parque", "la ubicación es…": se anota dónde está (la ubicación no es un campo del
@@ -253,7 +324,10 @@ export function PantallaEmergencia() {
         const tipo = interpretarTipoEmergencia(lugar ? texto.slice(0, lugar.index) : texto);
         const donde = lugar ? lugar[1].trim() : '';
         if (tipo) {
-            if (donde) setUbicacion(donde.charAt(0).toUpperCase() + donde.slice(1));
+            if (donde) {
+                escribioUbicacionRef.current = true;
+                setUbicacion(donde.charAt(0).toUpperCase() + donde.slice(1));
+            }
             return [{ tipo: 'accion', indice: -1, accion: { frases: [], ejecutar: () => void enviar(tipo, donde || ubicacion) } }];
         }
         if (donde && lugar?.index === 0) return [{ tipo: 'campo', campo: campoUbicacion, valor: donde }];
@@ -277,7 +351,7 @@ export function PantallaEmergencia() {
                         : tipoPorConfirmar
                             ? `Pedir ayuda. Responde sí o no: ¿le envío a ${nombreContacto} la alerta de ${nombreTipoEmergencia(tipoPorConfirmar).toLowerCase()}?`
                             : // Las opciones no van al final: lo último que dice VITA se ignora como eco si se repite enseguida
-                            `Pedir ayuda. Dime qué pasó: emergencia médica, accidente u otra emergencia, y enviaré la alerta a ${nombreContacto} de inmediato. Si quieres, también di dónde estás. ¿Qué pasó?`,
+                            `Pedir ayuda. Dime qué pasó: emergencia médica, accidente u otra emergencia, y enviaré la alerta a ${nombreContacto} de inmediato. Le compartiremos ${seCompartira} por mensaje de texto. ¿Qué pasó?`,
         ejemplos: contacto
             ? ['emergencia médica', 'tuve un accidente, estoy en mi casa', 'otra emergencia', `llamar a ${nombreContacto}`, `llamar al ${LINEA_EMERGENCIAS}`]
             : ['registrar contacto', `llamar al ${LINEA_EMERGENCIAS}`],
@@ -328,6 +402,24 @@ export function PantallaEmergencia() {
                         frases: ['ya me atendieron', 'ya estoy bien', 'marcar como atendida', 'atendida'],
                         etiqueta: 'marcar como atendida',
                         ejecutar: () => void marcarAtendida(resultado),
+                    },
+                ]
+                : []),
+            ...(contacto && !resultado && coordenadas
+                ? [
+                    {
+                        frases: ['no enviar mi ubicacion', 'no compartir mi ubicacion', 'sin ubicacion', 'quitar ubicacion', 'no enviar la ubicacion'],
+                        etiqueta: 'no enviar tu ubicación exacta',
+                        ejecutar: quitarUbicacion,
+                    },
+                ]
+                : []),
+            ...(contacto && !resultado && !coordenadas && estadoUbicacion !== 'buscando'
+                ? [
+                    {
+                        frases: ['usar mi ubicacion', 'enviar mi ubicacion', 'compartir mi ubicacion', 'buscar mi ubicacion', 'permitir ubicacion'],
+                        etiqueta: 'usar tu ubicación',
+                        ejecutar: usarUbicacion,
                     },
                 ]
                 : []),
@@ -412,6 +504,10 @@ export function PantallaEmergencia() {
                             </Texto>
                             {contacto.parentesco ? ` (${contacto.parentesco.toLowerCase()})` : ''} al {telefono}.
                         </Texto>
+                        <Aviso
+                            tipo="info"
+                            mensaje={`Al enviar la alerta, ${seCompartira === 'tu nombre' ? 'tu nombre se compartirá' : `${seCompartira} se compartirán`} con ${contacto.nombre} por mensaje de texto.`}
+                        />
 
                         <View style={styles.tipos}>
                             {TIPOS_EMERGENCIA.map((t) => {
@@ -452,8 +548,9 @@ export function PantallaEmergencia() {
                                                     ¿Enviamos la alerta a {contacto.nombre}?
                                                 </Texto>
                                                 <Texto variante="pequeno" color="textoSecundario">
-                                                    Le llegará un mensaje de texto avisando que tienes una {t.titulo.toLowerCase()}
-                                                    {ubicacion.trim() ? ` y que estás en: ${ubicacion.trim()}` : ''}.
+                                                    Le llegará un mensaje de texto con tu nombre, avisando que tienes una {t.titulo.toLowerCase()}
+                                                    {ubicacion.trim() ? `, que estás en: ${ubicacion.trim()}` : ''}
+                                                    {coordenadas ? ' y un enlace para ver tu ubicación en el mapa' : ''}.
                                                 </Texto>
                                                 <Boton
                                                     titulo="Sí, enviar alerta"
@@ -480,9 +577,19 @@ export function PantallaEmergencia() {
                             icono="ubicacion"
                             placeholder="Ej: En mi casa, Calle 10 # 5-20"
                             value={ubicacion}
-                            onChangeText={setUbicacion}
+                            onChangeText={(v) => {
+                                escribioUbicacionRef.current = true;
+                                setUbicacion(v);
+                            }}
                             maxLength={500}
                             ayuda="Se incluye en el mensaje para que sepan dónde encontrarte."
+                        />
+                        <EstadoDeUbicacion
+                            estado={estadoUbicacion}
+                            puedePreguntar={puedePreguntarUbicacion}
+                            coordenadas={coordenadas}
+                            alQuitar={quitarUbicacion}
+                            alUsar={usarUbicacion}
                         />
                     </Tarjeta>
 
@@ -515,18 +622,28 @@ export function PantallaEmergencia() {
                                     texto: nombreEstadoEmergencia(s.estado),
                                     tipo: s.estado === 'FALLIDA' ? 'error' : s.estado === 'ATENDIDA' ? 'exito' : 'info',
                                 }}
-                                acciones={
-                                    s.estado === 'ENVIADA'
+                                acciones={[
+                                    ...(s.estado === 'ENVIADA'
                                         ? [
                                             {
                                                 titulo: marcando === s.id ? 'Marcando…' : 'Marcar como atendida',
-                                                icono: 'check',
+                                                icono: 'check' as const,
                                                 onPress: () => void marcarAtendida(s),
                                                 descripcion: `Marcar como atendida la ${nombreTipoEmergencia(s.tipo).toLowerCase()} del ${fechaHoraLarga(s.fechaHora)}`,
                                             },
                                         ]
-                                        : []
-                                }
+                                        : []),
+                                    ...(s.latitud != null && s.longitud != null
+                                        ? [
+                                            {
+                                                titulo: 'Ver en el mapa',
+                                                icono: 'ubicacion' as const,
+                                                onPress: () => void Linking.openURL(enlaceMapa({ latitud: s.latitud!, longitud: s.longitud! })),
+                                                descripcion: `Ver en el mapa la ubicación enviada el ${fechaHoraLarga(s.fechaHora)}`,
+                                            },
+                                        ]
+                                        : []),
+                                ]}
                             />
                         ))}
                     </View>
@@ -570,5 +687,71 @@ const styles = StyleSheet.create({
     },
     lista: {
         gap: Espacio.m,
+    },
+});
+
+/** Debajo de "¿Dónde estás?": si se encontró la ubicación, si se está buscando o por qué no se tiene. */
+function EstadoDeUbicacion({
+                               estado,
+                               puedePreguntar,
+                               coordenadas,
+                               alQuitar,
+                               alUsar,
+                           }: {
+    estado: 'buscando' | UbicacionObtenida['estado'] | 'quitada';
+    puedePreguntar: boolean;
+    coordenadas: Coordenadas | null;
+    alQuitar: () => void;
+    alUsar: () => void;
+}) {
+    const { colores } = useAccesibilidad();
+    const linea = (icono: 'miUbicacion' | 'ubicacion' | 'info', texto: string, color = colores.textoSecundario) => (
+        <View style={estilosUbicacion.fila}>
+            <Icono nombre={icono} tamano={20} color={color} />
+            <Texto variante="pequeno" style={[estilosUbicacion.texto, { color }]}>
+                {texto}
+            </Texto>
+        </View>
+    );
+
+    if (estado === 'buscando') return linea('miUbicacion', 'Buscando tu ubicación…');
+    if (estado === 'lista' && coordenadas) {
+        return (
+            <View style={estilosUbicacion.caja}>
+                {linea('miUbicacion', 'Ubicación detectada. Tu contacto recibirá un enlace de Google Maps para ver dónde estás.', colores.exito)}
+                <Boton titulo="No enviar mi ubicación exacta" variante="secundario" onPress={alQuitar} />
+            </View>
+        );
+    }
+    const textos = {
+        sinPermiso: 'No diste permiso para usar tu ubicación. Puedes escribir dónde estás o enviar la alerta solo con tu nombre.',
+        noDisponible: 'No pudimos obtener tu ubicación (revisa que el GPS esté encendido). Puedes escribir dónde estás.',
+        quitada: 'No enviaremos tu ubicación exacta.',
+    } as const;
+    const texto = textos[estado as keyof typeof textos] ?? textos.noDisponible;
+    return (
+        <View style={estilosUbicacion.caja}>
+            {linea('info', texto)}
+            <Boton
+                titulo={estado === 'sinPermiso' && !puedePreguntar ? 'Activar ubicación en ajustes' : 'Usar mi ubicación'}
+                icono="miUbicacion"
+                variante="secundario"
+                onPress={alUsar}
+            />
+        </View>
+    );
+}
+
+const estilosUbicacion = StyleSheet.create({
+    caja: {
+        gap: Espacio.s,
+    },
+    fila: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Espacio.s,
+    },
+    texto: {
+        flexShrink: 1,
     },
 });

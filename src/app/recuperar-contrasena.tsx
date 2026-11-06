@@ -7,6 +7,7 @@ import { Boton } from '@/components/vita/boton';
 import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { Encabezado } from '@/components/vita/encabezado';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
+import { RequisitosContrasena } from '@/components/vita/requisitos-contrasena';
 import { Tarjeta } from '@/components/vita/tarjeta';
 import { Texto } from '@/components/vita/texto';
 import { Espacio } from '@/constants/vita-theme';
@@ -15,6 +16,7 @@ import { useComandosPantalla } from '@/context/asistente-context';
 import { restablecerContrasena, solicitarCodigoRecuperacion } from '@/services/authService';
 import { mensajeDeError } from '@/utils/sesion';
 import { campoDelError } from '@/utils/textos';
+import { REQUISITOS_CONTRASENA_VOZ } from '@/utils/politica-contrasena';
 import { errorContrasena, errorCorreo } from '@/utils/validaciones';
 
 type Errores = Partial<Record<'correo' | 'codigo' | 'nueva' | 'confirmacion', string>>;
@@ -109,8 +111,8 @@ export default function RecuperarContrasenaScreen() {
         const encontrados: Errores = {};
         if (!codigo.trim()) encontrados.codigo = 'Escribe el código que llegó a tu correo';
         else if (!/^\d{6}$/.test(codigo.trim())) encontrados.codigo = 'El código debe tener 6 dígitos';
-        const errorNueva = errorContrasena(nueva);
-        if (errorNueva) encontrados.nueva = 'La nueva contraseña debe tener al menos 8 caracteres';
+        const errorNueva = errorContrasena(nueva, 'Escribe tu nueva contraseña');
+        if (errorNueva) encontrados.nueva = errorNueva;
         if (!encontrados.nueva && confirmacion !== nueva) encontrados.confirmacion = 'Las contraseñas no coinciden';
         setErrores(encontrados);
         setAviso(null);
@@ -187,7 +189,7 @@ export default function RecuperarContrasenaScreen() {
                     {
                         claves: ['nueva contrasena', 'contrasena nueva', 'clave nueva', 'nueva clave', 'contrasena', 'nueva'],
                         etiqueta: 'Nueva contraseña',
-                        pregunta: '¿Cuál quieres que sea tu nueva contraseña? Debe tener al menos 8 caracteres.',
+                        pregunta: `¿Cuál quieres que sea tu nueva contraseña? ${REQUISITOS_CONTRASENA_VOZ}`,
                         tipo: 'contrasena',
                         valor: nueva,
                         asignar: (v) => {
@@ -296,7 +298,7 @@ export default function RecuperarContrasenaScreen() {
                         etiqueta="Nueva contraseña"
                         obligatorio
                         icono="llave"
-                        placeholder="Mínimo 8 caracteres"
+                        placeholder="Crea una contraseña segura"
                         value={nueva}
                         onChangeText={(v) => {
                             setNueva(v);
@@ -309,6 +311,7 @@ export default function RecuperarContrasenaScreen() {
                         returnKeyType="next"
                         onSubmitEditing={() => confirmacionRef.current?.focus()}
                     />
+                    <RequisitosContrasena valor={nueva} />
                     <Campo
                         ref={confirmacionRef}
                         etiqueta="Confirmar contraseña"

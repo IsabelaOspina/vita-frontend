@@ -9,4 +9,6 @@ export interface SolicitudEmergenciaResponse {
     estado: EstadoEmergencia;
     nombreContacto: string | null;
     telefonoContacto: string | null;
+    latitud: number | null;
+    longitud: number | null;
 }

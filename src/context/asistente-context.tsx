@@ -575,10 +575,10 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
             if (entendidos.length === 0) {
                 fallosRef.current += 1;
                 if (fallosRef.current === 1) {
-                    hablar('No te entendí. Si lo necesitas, pide ayuda. ¿Me lo repites?');
+                    hablar('No te entendí. Si no sabes qué decir, pregunta: qué puedo decir. ¿Me lo repites?');
                     seguimientoRef.current = true;
                 } else {
-                    hablar('No te entendí. Cuando quieras, di: Oye VITA, ayuda.');
+                    hablar('No te entendí. Cuando quieras, di: Oye VITA, qué puedo decir.');
                     fallosRef.current = 0;
                 }
                 return;
@@ -933,7 +933,7 @@ export function AsistenteProvider({ children }: { children: ReactNode }) {
                 abrirPedirAyuda(emergencia.tipo);
                 return;
             }
-            hablar(`Modo voz activado. Di Oye VITA cuando me necesites, o pide ayuda. ${pantalla?.titulo ?? ''}.`);
+            hablar(`Modo voz activado. Di Oye VITA cuando me necesites. Si no sabes qué decir, pregunta: qué puedo decir. ${pantalla?.titulo ?? ''}.`);
             // Empieza a pedir los datos de la pantalla; si no falta nada, pregunta qué quiere hacer
             if (!continuarFlujo(new Set(), null, true)) hablar('¿Qué quieres hacer?', true);
             seguimientoRef.current = true;

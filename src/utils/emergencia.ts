@@ -1,7 +1,7 @@
 import type { EstadoEmergencia } from '@/dto/EstadoEmergencia';
 import type { TipoEmergencia } from '@/dto/TipoEmergencia';
 
-import { aPalabras } from './comandos-voz';
+import { aPalabras, FRASES_AYUDA_APP } from './comandos-voz';
 
 /** Línea de emergencias de Colombia. */
 export const LINEA_EMERGENCIAS = '123';
@@ -68,6 +68,8 @@ export function telefonoDiezDigitos(telefono: string): string {
 export function detectarPedidoDeAyuda(texto: string): TipoEmergencia | null | undefined {
     const t = aPalabras(texto);
     if (!t) return undefined;
+    // "Ayuda con la aplicación", "cómo funciona": es la ayuda para usar VITA, no una emergencia
+    if (FRASES_AYUDA_APP.some((f) => ` ${t} `.includes(` ${f} `))) return undefined;
     const pideAyuda =
         /^(ayuda|ayudame|ayudenme|ayuda por favor)$/.test(t) ||
         /\b(pedir ayuda|pide ayuda|necesito ayuda|ayudenme|ayudame por favor|ayuda por favor|auxilio|socorro|emergencia|ambulancia|tuve un accidente|me accidente|me cai)\b/.test(t);

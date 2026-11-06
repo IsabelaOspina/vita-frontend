@@ -7,17 +7,25 @@ import { Boton } from '@/components/vita/boton';
 import { Campo, NotaCamposObligatorios } from '@/components/vita/campo';
 import { Encabezado } from '@/components/vita/encabezado';
 import { FondoPantalla } from '@/components/vita/fondo-pantalla';
+import { RequisitosContrasena } from '@/components/vita/requisitos-contrasena';
 import { Tarjeta } from '@/components/vita/tarjeta';
 import { Espacio } from '@/constants/vita-theme';
 import { useAccesibilidad } from '@/context/accesibilidad-context';
 import { useComandosPantalla } from '@/context/asistente-context';
-import { cambiarMiContrasena } from '@/services/usuarioService';
-import { mensajeDeError, tokenActual } from '@/utils/sesion';
+import { iniciarSesion } from '@/services/authService';
+import { cambiarMiContrasena, obtenerMiUsuario } from '@/services/usuarioService';
+import { errorPoliticaContrasena, REQUISITOS_CONTRASENA_VOZ } from '@/utils/politica-contrasena';
+import { cerrarSesion, mensajeDeError, tokenActual } from '@/utils/sesion';
 import { campoDelError } from '@/utils/textos';
 
 type Errores = Partial<Record<'actual' | 'nueva' | 'confirmacion', string>>;
 
-/** Cambiar la contraseña de quien tiene la sesión iniciada (sirve para todos los roles). */
+/**
+ * Cambiar la contraseña de quien tiene la sesión iniciada (sirve para todos los roles).
+ * La nueva debe cumplir la política del backend y ser diferente a la actual. Al cambiarla, el
+ * backend invalida las sesiones abiertas; por eso aquí se vuelve a iniciar sesión sola con la
+ * contraseña nueva y la persona sigue usando la app sin notarlo.
+ */
 export default function CambiarContrasenaScreen() {
     const { anunciar } = useAccesibilidad();
 
@@ -36,7 +44,8 @@ export default function CambiarContrasenaScreen() {
     const guardar = async () => {
         const encontrados: Errores = {};
         if (!actual) encontrados.actual = 'Escribe tu contraseña actual';
-        if (nueva.length < 8) encontrados.nueva = 'La nueva contraseña debe tener al menos 8 caracteres';
+        const errorNueva = errorPoliticaContrasena(nueva, { vacia: 'Escribe tu nueva contraseña', actual: actual || undefined });
+        if (errorNueva) encontrados.nueva = errorNueva;
         if (!encontrados.nueva && confirmacion !== nueva) encontrados.confirmacion = 'Las contraseñas no coinciden';
         setErrores(encontrados);
         setAviso(null);
@@ -47,7 +56,19 @@ export default function CambiarContrasenaScreen() {
 
         setCargando(true);
         try {
-            await cambiarMiContrasena({ contrasenaActual: actual, contrasenaNueva: nueva }, await tokenActual());
+            const token = await tokenActual();
+            // El correo se toma antes del cambio: después, el token actual deja de servir
+            const { correo } = await obtenerMiUsuario(token);
+            await cambiarMiContrasena({ contrasenaActual: actual, contrasenaNueva: nueva }, token);
+            try {
+                // Nueva sesión con la contraseña nueva (guarda el token nuevo)
+                await iniciarSesion({ correo, contrasena: nueva });
+            } catch {
+                const mensaje = 'Tu contraseña quedó cambiada. Por seguridad, vuelve a iniciar sesión con la nueva contraseña.';
+                anunciar(mensaje);
+                await cerrarSesion();
+                return;
+            }
             const mensaje = 'Listo, tu contraseña quedó cambiada.';
             setAviso({ tipo: 'exito', mensaje });
             setActual('');
@@ -85,7 +106,7 @@ export default function CambiarContrasenaScreen() {
             {
                 claves: ['nueva contrasena', 'contrasena nueva', 'clave nueva', 'nueva clave', 'nueva'],
                 etiqueta: 'Nueva contraseña',
-                pregunta: '¿Cuál quieres que sea tu nueva contraseña? Debe tener al menos 8 caracteres.',
+                pregunta: `¿Cuál quieres que sea tu nueva contraseña? ${REQUISITOS_CONTRASENA_VOZ} Y debe ser diferente a la actual.`,
                 tipo: 'contrasena',
                 valor: nueva,
                 asignar: setNueva,
@@ -129,7 +150,7 @@ export default function CambiarContrasenaScreen() {
                     etiqueta="Nueva contraseña"
                     obligatorio
                     icono="llave"
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder="Crea una contraseña segura"
                     value={nueva}
                     onChangeText={setNueva}
                     error={errores.nueva}
@@ -138,6 +159,7 @@ export default function CambiarContrasenaScreen() {
                     returnKeyType="next"
                     onSubmitEditing={() => confirmacionRef.current?.focus()}
                 />
+                <RequisitosContrasena valor={nueva} actual={actual} />
                 <Campo
                     ref={confirmacionRef}
                     etiqueta="Confirmar contraseña"
